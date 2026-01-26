@@ -503,10 +503,13 @@ def main():
         existing_files = list(THEO_CHROMA_PATH.iterdir())
         if existing_files and not args.dry_run:
             log(f"WARNING: Target directory is not empty: {existing_files}")
-            response = input("Continue and merge data? [y/N] ")
-            if response.lower() != 'y':
-                log("Aborted.")
-                sys.exit(0)
+            if args.yes:
+                log("Auto-confirmed with --yes flag")
+            else:
+                response = input("Continue and merge data? [y/N] ")
+                if response.lower() != 'y':
+                    log("Aborted.")
+                    sys.exit(0)
     
     # Read from backup using direct SQLite (avoid corrupted FTS5)
     log("")
