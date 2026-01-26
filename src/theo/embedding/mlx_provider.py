@@ -152,14 +152,10 @@ class MLXProvider:
                     for emb in embeddings
                 ]
 
-            # Clear MLX cache to prevent GPU memory accumulation across batches
-            # Without this, intermediate tensors accumulate and can consume 18+ GB
-            try:
-                import mlx.core as mx
-
-                mx.clear_cache()
-            except Exception:
-                pass  # Non-critical - just memory optimization
+            # NOTE: Do NOT call mx.clear_cache() here - it causes Metal race conditions
+            # when used with asyncio.to_thread(). The error manifests as:
+            # "-[_MTLCommandBuffer addCompletedHandler:]:976: failed assertion"
+            # Memory will be managed by Python GC and MLX's internal cache management.
 
             return result
         except EmbeddingError:
