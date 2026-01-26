@@ -271,6 +271,15 @@ Implements the TRY → BREAK → ANALYZE → LEARN cycle:
 
 The daemon solves the MCP timeout problem that occurs when blocking on expensive embedding operations. MCP servers use stdio transport where blocking operations cause timeouts.
 
+**CRITICAL: MLX Threading Constraint**
+
+MLX Metal GPU operations are NOT thread-safe. The `embed_batch()` method MUST run on the main thread - never via `asyncio.to_thread()`. Using thread pools causes Metal command buffer race conditions with errors like:
+```
+-[_MTLCommandBuffer addCompletedHandler:]:976: failed assertion
+```
+
+The daemon's embed_worker is designed to briefly block the event loop (~50-100ms per batch) rather than use thread pools. This is the only reliable approach without process isolation. Additionally, never call `mx.clear_cache()` during embedding operations.
+
 #### DaemonServer
 
 **Implementation**: `src/theo/daemon/server.py`
