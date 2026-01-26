@@ -218,7 +218,7 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
         components["embedder"] = embedder
 
         # 2. Initialize ChromaDB storage
-        db_path = Path(args.db_path).resolve()
+        db_path = Path(args.db_path).expanduser().resolve()
         logger.info(
             f"Initializing ChromaStore (path={db_path}, collection={args.collection})"
         )
