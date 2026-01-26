@@ -4,7 +4,7 @@ This document provides detailed specifications for all MCP tools exposed by the 
 
 ## Overview
 
-Theo exposes 14 tools organized into four categories:
+Theo exposes 25 tools organized into seven categories:
 
 **Document Indexing Tools**
 1. `index_file` - Index a single document
@@ -15,18 +15,37 @@ Theo exposes 14 tools organized into four categories:
 4. `search_with_filters` - Search with metadata filtering
 5. `search_with_budget` - Token-budget aware search
 
-**Memory Tools**
+**Memory Tools (Core)**
 6. `memory_store` - Store a new memory
 7. `memory_recall` - Recall memories by semantic search
 8. `memory_validate` - Validate and adjust memory confidence
 9. `memory_forget` - Delete memories
 10. `memory_context` - Generate context for LLM injection
 
+**TRY/LEARN Cycle Tools**
+11. `memory_apply` - Record memory application (TRY phase)
+12. `memory_outcome` - Record outcome and adjust confidence (LEARN phase)
+
+**Graph Relationship Tools**
+13. `memory_relate` - Create relationships between memories
+14. `memory_edge_forget` - Delete edges/relationships
+15. `memory_inspect_graph` - Visualize memory graph structure
+
+**Memory Inspection Tools**
+16. `memory_count` - Count memories with filters
+17. `memory_list` - List memories with pagination
+18. `validation_history` - Get validation event history
+
+**Validation Analysis Tools**
+19. `memory_detect_contradictions` - Find contradicting memories
+20. `memory_check_supersedes` - Check if memory supersedes another
+21. `memory_analyze_health` - Analyze memory system health
+
 **Management Tools**
-11. `delete_chunks` - Delete specific chunks by ID
-12. `delete_file` - Delete all chunks from a source file
-13. `clear_index` - Clear entire collection (requires confirmation)
-14. `get_index_stats` - Get collection statistics
+22. `delete_chunks` - Delete specific chunks by ID
+23. `delete_file` - Delete all chunks from a source file
+24. `clear_index` - Clear entire collection (requires confirmation)
+25. `get_index_stats` - Get collection statistics
 
 ---
 
