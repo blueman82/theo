@@ -324,6 +324,79 @@ With Theo, you can now:
 
 ---
 
+## Real-World Migration Learnings
+
+Based on actual migrations from DocVec and Recall to Theo, here are important lessons learned:
+
+### Migration Statistics (Actual Results)
+
+A complete migration from both DocVec and Recall yielded:
+- **12,947 total items migrated** (10,723 DocVec documents + 3,942 Recall memories - 1,658 duplicates)
+- **5,510 relationship edges preserved** in SQLite
+- **Storage reduced**: ChromaDB went from 351GB (bloated) to 110MB (fresh)
+- **Deduplication**: ~13% of items were duplicates across systems
+
+### Critical: ChromaDB HNSW Index Bloat
+
+**Problem**: Copying old ChromaDB databases can result in massive index bloat. HNSW indexes can grow to 600GB+ if:
+- Many documents were added and deleted over time
+- The index was never compacted
+- Multiple embedding models were used
+
+**Solution**: Always regenerate embeddings fresh with MLX rather than copying old databases.
+
+```bash
+# DON'T do this (can inherit bloated indexes):
+cp -r ~/.docvec/chroma_db ~/.theo/chroma_db
+
+# DO this instead (fresh start with clean indexes):
+rm -rf ~/.theo/chroma_db
+# Then re-index via Claude: "Index all my documents"
+```
+
+### Recommended Migration Approach
+
+1. **Start Fresh** - Don't copy old ChromaDB databases
+2. **Use MLX Embeddings** - Regenerate all embeddings with MLX for consistency
+3. **Migrate Memories First** - Import Recall memories before documents (they're smaller)
+4. **Preserve Edges** - Export and re-import relationship edges from Recall's SQLite
+
+### Automated Migration Script
+
+For large migrations, use the migration script:
+
+```bash
+# Run from theo directory
+uv run python scripts/migrate_from_legacy.py \
+  --docvec-path ~/.docvec/chroma_db \
+  --recall-path ~/.recall/memories.db \
+  --theo-path ~/.theo/chroma_db \
+  --fresh-embeddings  # Recommended: regenerate with MLX
+```
+
+The script handles:
+- Reading from old DocVec ChromaDB collection ("documents")
+- Reading from old Recall SQLite database
+- Deduplication across both sources
+- Fresh MLX embedding generation
+- Edge preservation in Theo's SQLite
+
+### Post-Migration Verification
+
+After migration, verify data integrity:
+
+```
+# Check stats via Claude:
+"Show me Theo index stats"
+
+# Expected output should show:
+# - Total documents matching your DocVec count
+# - Total memories matching your Recall count
+# - Edges count matching your relationship edges
+```
+
+---
+
 ## Configuration Reference
 
 ### Environment Variables
@@ -374,6 +447,93 @@ uv run python -m theo \
 | SQLite → ChromaDB | High | Re-import memories |
 | Added confidence scoring | None | Auto-applied |
 | Added golden rule protection | Low | Use `force=true` to delete |
+
+---
+
+## Migrating Claude Code Hooks
+
+If you have Claude Code hooks using DocVec or Recall, they need to be updated to use Theo.
+
+### Hook File Mapping
+
+| Old Hook | New Hook | Purpose |
+|----------|----------|---------|
+| `docvec-track.py` | `theo-track.py` | Track file activity |
+| `recall-track.py` | `theo-track.py` | Track file activity (merged) |
+| `docvec-context.py` | `theo-context.py` | Inject context into prompts |
+| `recall-capture.py` | `theo-capture.py` | Capture session learnings |
+| `recall-compact.py` | `theo-compact.py` | Store on context compaction |
+
+### Shared Client Pattern
+
+All Theo hooks use a shared client from `theo_client.py`:
+
+```python
+# ~/.claude/hooks/theo_client.py
+import socket
+import json
+
+THEO_SOCKET = "/tmp/theo.sock"
+
+def get_shared_client():
+    """Get shared daemon client for all hooks."""
+    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    sock.connect(THEO_SOCKET)
+    return sock
+
+def call_theo(method: str, params: dict) -> dict:
+    """Call Theo daemon method."""
+    sock = get_shared_client()
+    try:
+        request = {"method": method, "params": params}
+        sock.sendall(json.dumps(request).encode() + b"\n")
+        response = sock.recv(65536).decode()
+        return json.loads(response)
+    finally:
+        sock.close()
+```
+
+### Updating Hook Imports
+
+**Before (DocVec/Recall)**:
+```python
+from docvec_client import get_client
+# or
+from recall_client import get_client
+```
+
+**After (Theo)**:
+```python
+from theo_client import get_shared_client, call_theo
+```
+
+### Example: Context Hook Migration
+
+**Before** (`docvec-context.py`):
+```python
+result = docvec.search(query=context_query, n_results=5)
+```
+
+**After** (`theo-context.py`):
+```python
+result = call_theo("search", {"query": context_query, "n_results": 5})
+# Or for memories:
+result = call_theo("memory_context", {"query": context_query, "token_budget": 2000})
+```
+
+### Hook Installation
+
+Copy hooks to your Claude Code hooks directory:
+
+```bash
+# Copy all theo hooks
+cp ~/.claude/hooks/theo-*.py ~/.claude/hooks/
+cp ~/.claude/hooks/theo_client.py ~/.claude/hooks/
+
+# Remove old hooks (optional, after verifying theo hooks work)
+rm ~/.claude/hooks/docvec-*.py
+rm ~/.claude/hooks/recall-*.py
+```
 
 ---
 

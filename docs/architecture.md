@@ -100,6 +100,81 @@ Built on three core principles:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Mermaid Diagram
+
+```mermaid
+flowchart TB
+    subgraph Client["MCP Client"]
+        CC[Claude Code]
+    end
+
+    subgraph MCPServer["MCP Server Layer"]
+        FM[FastMCP Server]
+        subgraph Tools["Tool Registration"]
+            DT[Document Tools]
+            ST[Search Tools]
+            MT[Memory Tools]
+            MGT[Management Tools]
+        end
+    end
+
+    subgraph Business["Business Logic Layer"]
+        IT[IndexingTools]
+        QT[QueryTools]
+        MTools[MemoryTools]
+        VL[ValidationLoop]
+    end
+
+    subgraph Daemon["Daemon Layer"]
+        DC[DaemonClient]
+        DS[DaemonServer]
+        W[Worker Pool]
+        JQ[JobQueue]
+    end
+
+    subgraph Services["Service Layer"]
+        subgraph Chunkers["Document Chunkers"]
+            MC[MarkdownChunker]
+            PC[PDFChunker]
+            TC[TextChunker]
+            CodeC[CodeChunker]
+        end
+        subgraph Embedding["Embedding Providers"]
+            EP[EmbeddingProvider Protocol]
+            MLX[MLX Provider]
+            OLL[Ollama Provider]
+        end
+    end
+
+    subgraph Storage["Storage Layer"]
+        HS[HybridStore]
+        CDB[(ChromaDB<br/>Vector Storage)]
+        SQL[(SQLite<br/>Edges & Metadata)]
+    end
+
+    CC -->|JSON-RPC/stdio| FM
+    FM --> DT & ST & MT & MGT
+    DT --> IT
+    ST --> QT
+    MT --> MTools
+    MTools --> VL
+
+    IT --> DC
+    QT --> DC
+    MTools --> DC
+
+    DC <-->|Unix Socket| DS
+    DS --> W
+    W --> JQ
+
+    IT --> Chunkers
+    W --> Embedding
+    EP --> MLX & OLL
+
+    DC --> HS
+    HS --> CDB & SQL
+```
+
 ## Component Descriptions
 
 ### MCP Server Layer
@@ -259,6 +334,26 @@ class EmbeddingProvider(Protocol):
 - Exponential backoff retry
 - Configurable timeout
 
+#### HybridStore
+
+**Responsibility**: Coordinated storage combining ChromaDB and SQLite
+
+**Implementation**: `src/theo/storage/hybrid.py`
+
+The HybridStore coordinates two storage backends:
+- **ChromaDB**: Source of truth for all document/memory content and embeddings
+- **SQLite**: Handles relationship edges for graph traversal
+
+```python
+class HybridStore:
+    """Coordinated storage layer."""
+    chroma: ChromaStore      # Vector storage
+    sqlite: SQLiteStore      # Edge storage
+
+    def store_with_edges(self, doc, edges): ...
+    def query_with_graph_expansion(self, query, depth): ...
+```
+
 #### ChromaStore
 
 **Responsibility**: Vector database operations
@@ -270,6 +365,18 @@ Features:
 - Vector similarity search
 - Metadata filtering (WHERE clauses)
 - Deduplication tracking (by hash)
+
+#### SQLiteStore
+
+**Responsibility**: Relationship edge storage and graph traversal
+
+**Implementation**: `src/theo/storage/sqlite.py`
+
+Features:
+- Edge storage (source_id, target_id, relation_type, weight)
+- Graph traversal queries (BFS, path finding)
+- Validation event history
+- Fast relationship lookups
 
 ### Document Chunkers
 
