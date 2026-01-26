@@ -20,6 +20,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Token-efficient**: Smart chunking and retrieval to minimize context usage
 - **Validation-driven**: Memories build confidence through practical use
 
+## Validation Loop (ELF-Inspired)
+
+Theo implements a validation loop to build confidence in memories through practical use:
+
+```
+TRY → BREAK → ANALYZE → LEARN
+ ↑                        ↓
+ └────────────────────────┘
+```
+
 ## Development Commands
 
 ### Environment Setup
@@ -84,8 +94,8 @@ uv run isort src/ tests/
 ```
 src/theo/
 ├── __init__.py          # Package entry point with __version__
-├── __main__.py          # MCP server entry point (planned)
-├── config.py            # Pydantic Settings configuration (planned)
+├── __main__.py          # MCP server entry point
+├── config.py            # Pydantic Settings configuration
 ├── indexing/            # Document indexing (from DocVec)
 │   ├── indexer.py       # Core document indexer
 │   ├── batch_processor.py
@@ -175,7 +185,7 @@ def test_something(mock_embedder, temp_chroma):
 
 ## Configuration
 
-Settings via environment variables with `THEO_` prefix (planned):
+Settings via environment variables with `THEO_` prefix:
 
 | Variable | Default | Description |
 |----------|---------|-------------|

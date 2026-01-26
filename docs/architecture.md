@@ -100,6 +100,81 @@ Built on three core principles:
 └─────────────────────────────────────────────────────────────┘
 ```
 
+### Mermaid Diagram
+
+```mermaid
+flowchart TB
+    subgraph Client["MCP Client"]
+        CC[Claude Code]
+    end
+
+    subgraph MCPServer["MCP Server Layer"]
+        FM[FastMCP Server]
+        subgraph Tools["Tool Registration"]
+            DT[Document Tools]
+            ST[Search Tools]
+            MT[Memory Tools]
+            MGT[Management Tools]
+        end
+    end
+
+    subgraph Business["Business Logic Layer"]
+        IT[IndexingTools]
+        QT[QueryTools]
+        MTools[MemoryTools]
+        VL[ValidationLoop]
+    end
+
+    subgraph Daemon["Daemon Layer"]
+        DC[DaemonClient]
+        DS[DaemonServer]
+        W[Worker Pool]
+        JQ[JobQueue]
+    end
+
+    subgraph Services["Service Layer"]
+        subgraph Chunkers["Document Chunkers"]
+            MC[MarkdownChunker]
+            PC[PDFChunker]
+            TC[TextChunker]
+            CodeC[CodeChunker]
+        end
+        subgraph Embedding["Embedding Providers"]
+            EP[EmbeddingProvider Protocol]
+            MLX[MLX Provider]
+            OLL[Ollama Provider]
+        end
+    end
+
+    subgraph Storage["Storage Layer"]
+        HS[HybridStore]
+        CDB[(ChromaDB<br/>Vector Storage)]
+        SQL[(SQLite<br/>Edges & Metadata)]
+    end
+
+    CC -->|JSON-RPC/stdio| FM
+    FM --> DT & ST & MT & MGT
+    DT --> IT
+    ST --> QT
+    MT --> MTools
+    MTools --> VL
+
+    IT --> DC
+    QT --> DC
+    MTools --> DC
+
+    DC <-->|Unix Socket| DS
+    DS --> W
+    W --> JQ
+
+    IT --> Chunkers
+    W --> Embedding
+    EP --> MLX & OLL
+
+    DC --> HS
+    HS --> CDB & SQL
+```
+
 ## Component Descriptions
 
 ### MCP Server Layer
@@ -196,6 +271,15 @@ Implements the TRY → BREAK → ANALYZE → LEARN cycle:
 
 The daemon solves the MCP timeout problem that occurs when blocking on expensive embedding operations. MCP servers use stdio transport where blocking operations cause timeouts.
 
+**CRITICAL: MLX Threading Constraint**
+
+MLX Metal GPU operations are NOT thread-safe. The `embed_batch()` method MUST run on the main thread - never via `asyncio.to_thread()`. Using thread pools causes Metal command buffer race conditions with errors like:
+```
+-[_MTLCommandBuffer addCompletedHandler:]:976: failed assertion
+```
+
+The daemon's embed_worker is designed to briefly block the event loop (~50-100ms per batch) rather than use thread pools. This is the only reliable approach without process isolation. Additionally, never call `mx.clear_cache()` during embedding operations.
+
 #### DaemonServer
 
 **Implementation**: `src/theo/daemon/server.py`
@@ -250,6 +334,8 @@ class EmbeddingProvider(Protocol):
 - Model: mxbai-embed-large-v1 (default)
 - No external server required
 
+**Thread Safety**: MLX Metal is NOT thread-safe. All MLX operations must run on the main thread. The `embed_batch()` method runs synchronously by design - do NOT use `asyncio.to_thread()`. Never call `mx.clear_cache()` during embedding operations.
+
 #### Ollama Provider (Alternative)
 
 **Implementation**: `src/theo/embedding/ollama_provider.py`
@@ -258,6 +344,26 @@ class EmbeddingProvider(Protocol):
 - Batch embedding support
 - Exponential backoff retry
 - Configurable timeout
+
+#### HybridStore
+
+**Responsibility**: Coordinated storage combining ChromaDB and SQLite
+
+**Implementation**: `src/theo/storage/hybrid.py`
+
+The HybridStore coordinates two storage backends:
+- **ChromaDB**: Source of truth for all document/memory content and embeddings
+- **SQLite**: Handles relationship edges for graph traversal
+
+```python
+class HybridStore:
+    """Coordinated storage layer."""
+    chroma: ChromaStore      # Vector storage
+    sqlite: SQLiteStore      # Edge storage
+
+    def store_with_edges(self, doc, edges): ...
+    def query_with_graph_expansion(self, query, depth): ...
+```
 
 #### ChromaStore
 
@@ -270,6 +376,18 @@ Features:
 - Vector similarity search
 - Metadata filtering (WHERE clauses)
 - Deduplication tracking (by hash)
+
+#### SQLiteStore
+
+**Responsibility**: Relationship edge storage and graph traversal
+
+**Implementation**: `src/theo/storage/sqlite.py`
+
+Features:
+- Edge storage (source_id, target_id, relation_type, weight)
+- Graph traversal queries (BFS, path finding)
+- Validation event history
+- Fast relationship lookups
 
 ### Document Chunkers
 

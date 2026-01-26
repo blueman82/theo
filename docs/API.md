@@ -4,7 +4,7 @@ This document provides detailed specifications for all MCP tools exposed by the 
 
 ## Overview
 
-Theo exposes 14 tools organized into four categories:
+Theo exposes 25 tools organized into seven categories:
 
 **Document Indexing Tools**
 1. `index_file` - Index a single document
@@ -15,18 +15,37 @@ Theo exposes 14 tools organized into four categories:
 4. `search_with_filters` - Search with metadata filtering
 5. `search_with_budget` - Token-budget aware search
 
-**Memory Tools**
+**Memory Tools (Core)**
 6. `memory_store` - Store a new memory
 7. `memory_recall` - Recall memories by semantic search
 8. `memory_validate` - Validate and adjust memory confidence
 9. `memory_forget` - Delete memories
 10. `memory_context` - Generate context for LLM injection
 
+**TRY/LEARN Cycle Tools**
+11. `memory_apply` - Record memory application (TRY phase)
+12. `memory_outcome` - Record outcome and adjust confidence (LEARN phase)
+
+**Graph Relationship Tools**
+13. `memory_relate` - Create relationships between memories
+14. `memory_edge_forget` - Delete edges/relationships
+15. `memory_inspect_graph` - Visualize memory graph structure
+
+**Memory Inspection Tools**
+16. `memory_count` - Count memories with filters
+17. `memory_list` - List memories with pagination
+18. `validation_history` - Get validation event history
+
+**Validation Analysis Tools**
+19. `memory_detect_contradictions` - Find contradicting memories
+20. `memory_check_supersedes` - Check if memory supersedes another
+21. `memory_analyze_health` - Analyze memory system health
+
 **Management Tools**
-11. `delete_chunks` - Delete specific chunks by ID
-12. `delete_file` - Delete all chunks from a source file
-13. `clear_index` - Clear entire collection (requires confirmation)
-14. `get_index_stats` - Get collection statistics
+22. `delete_chunks` - Delete specific chunks by ID
+23. `delete_file` - Delete all chunks from a source file
+24. `clear_index` - Clear entire collection (requires confirmation)
+25. `get_index_stats` - Get collection statistics
 
 ---
 
@@ -671,6 +690,587 @@ Generated context is formatted as markdown:
 
 ### Decisions
 - Chose FastAPI over Flask for performance [confidence: 0.6]
+```
+
+---
+
+## TRY/LEARN Cycle Tools
+
+### Tool: memory_apply
+
+Record that a memory is being applied (TRY phase of validation loop).
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "ID of the memory being applied"
+    },
+    "context": {
+      "type": "string",
+      "description": "Description of how/where the memory is being applied"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Optional session identifier"
+    }
+  },
+  "required": ["memory_id", "context"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "memory_id": "mem_abc123",
+    "event_id": 42
+  }
+}
+```
+
+---
+
+### Tool: memory_outcome
+
+Record the outcome of a memory application (LEARN phase) and adjust confidence.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "ID of the memory that was applied"
+    },
+    "success": {
+      "type": "boolean",
+      "description": "Whether the application was successful"
+    },
+    "error_msg": {
+      "type": "string",
+      "description": "Optional error message if failed"
+    },
+    "session_id": {
+      "type": "string",
+      "description": "Optional session identifier"
+    }
+  },
+  "required": ["memory_id", "success"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "memory_id": "mem_abc123",
+    "outcome_success": true,
+    "old_confidence": 0.4,
+    "new_confidence": 0.5,
+    "promoted": false
+  }
+}
+```
+
+---
+
+## Graph Relationship Tools
+
+### Tool: memory_relate
+
+Create a relationship (edge) between two memories.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "source_id": {
+      "type": "string",
+      "description": "ID of the source memory"
+    },
+    "target_id": {
+      "type": "string",
+      "description": "ID of the target memory"
+    },
+    "relation": {
+      "type": "string",
+      "enum": ["relates_to", "supersedes", "caused_by", "contradicts"],
+      "description": "Type of relationship"
+    },
+    "weight": {
+      "type": "number",
+      "description": "Edge weight (default: 1.0)",
+      "default": 1.0
+    }
+  },
+  "required": ["source_id", "target_id", "relation"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "edge_id": 123
+  }
+}
+```
+
+---
+
+### Tool: memory_edge_forget
+
+Delete edges (relationships) between memories.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "edge_id": {
+      "type": "integer",
+      "description": "Specific edge ID to delete"
+    },
+    "memory_id": {
+      "type": "string",
+      "description": "Memory ID to delete all connected edges"
+    },
+    "source_id": {
+      "type": "string",
+      "description": "Source memory ID for pair deletion"
+    },
+    "target_id": {
+      "type": "string",
+      "description": "Target memory ID for pair deletion"
+    },
+    "relation": {
+      "type": "string",
+      "description": "Filter by relation type"
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["outgoing", "incoming", "both"],
+      "description": "For memory_id mode: edge direction",
+      "default": "both"
+    }
+  }
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "deleted_ids": [1, 2, 3],
+    "deleted_count": 3
+  }
+}
+```
+
+---
+
+### Tool: memory_inspect_graph
+
+Inspect the graph structure around a memory node.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "ID of the memory to start inspection from"
+    },
+    "max_depth": {
+      "type": "integer",
+      "description": "Maximum number of hops to traverse",
+      "default": 2
+    },
+    "direction": {
+      "type": "string",
+      "enum": ["outgoing", "incoming", "both"],
+      "default": "both"
+    },
+    "edge_types": {
+      "type": "array",
+      "items": {"type": "string"},
+      "description": "Optional list of edge types to include"
+    },
+    "include_scores": {
+      "type": "boolean",
+      "description": "Compute relevance scores for paths",
+      "default": true
+    },
+    "decay_factor": {
+      "type": "number",
+      "description": "Factor by which relevance decays per hop",
+      "default": 0.7
+    },
+    "output_format": {
+      "type": "string",
+      "enum": ["json", "mermaid"],
+      "default": "json"
+    }
+  },
+  "required": ["memory_id"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "origin_id": "mem_abc123",
+  "nodes": [
+    {"id": "mem_abc123", "content": "...", "depth": 0, "relevance": 1.0}
+  ],
+  "edges": [
+    {"id": 1, "source": "mem_abc123", "target": "mem_def456", "relation": "relates_to"}
+  ],
+  "paths": [
+    {"path": ["mem_abc123", "mem_def456"], "total_relevance": 0.7}
+  ],
+  "stats": {
+    "total_nodes": 5,
+    "total_edges": 4,
+    "max_depth_reached": 2
+  }
+}
+```
+
+---
+
+## Memory Inspection Tools
+
+### Tool: memory_count
+
+Count memories with optional filters.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "description": "Filter by namespace"
+    },
+    "memory_type": {
+      "type": "string",
+      "description": "Filter by memory type"
+    }
+  }
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "count": 42,
+    "filters": {
+      "namespace": "global",
+      "memory_type": null
+    }
+  }
+}
+```
+
+---
+
+### Tool: memory_list
+
+List memories with filtering and pagination.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "description": "Filter by namespace"
+    },
+    "memory_type": {
+      "type": "string",
+      "description": "Filter by memory type"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum number of results (default: 100, max: 1000)",
+      "default": 100
+    },
+    "offset": {
+      "type": "integer",
+      "description": "Number of results to skip for pagination",
+      "default": 0
+    },
+    "order_by": {
+      "type": "string",
+      "description": "Field to sort by",
+      "default": "created_at"
+    },
+    "descending": {
+      "type": "boolean",
+      "description": "Sort in descending order",
+      "default": true
+    }
+  }
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "memories": [
+      {
+        "id": "mem_abc123",
+        "content": "...",
+        "memory_type": "pattern",
+        "confidence": 0.7,
+        "created_at": "2026-01-26T12:00:00Z"
+      }
+    ],
+    "total": 100,
+    "limit": 100,
+    "offset": 0
+  }
+}
+```
+
+---
+
+### Tool: validation_history
+
+Get validation event history for a memory.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "ID of the memory to get history for"
+    },
+    "event_type": {
+      "type": "string",
+      "description": "Filter by event type (applied, succeeded, failed)"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum number of events to return",
+      "default": 50
+    }
+  },
+  "required": ["memory_id"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "events": [
+      {
+        "id": 1,
+        "event_type": "applied",
+        "context": "Applying to authentication flow",
+        "timestamp": "2026-01-26T12:00:00Z"
+      }
+    ],
+    "summary": {
+      "total_applications": 10,
+      "success_count": 8,
+      "failure_count": 2,
+      "success_rate": 0.8
+    }
+  }
+}
+```
+
+---
+
+## Validation Analysis Tools
+
+### Tool: memory_detect_contradictions
+
+Detect memories that contradict a given memory.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "ID of the memory to check for contradictions"
+    },
+    "similarity_threshold": {
+      "type": "number",
+      "description": "Minimum similarity for considering",
+      "default": 0.7
+    },
+    "create_edges": {
+      "type": "boolean",
+      "description": "Whether to create CONTRADICTS edges",
+      "default": true
+    }
+  },
+  "required": ["memory_id"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "contradictions": [
+      {
+        "memory_id": "mem_def456",
+        "content": "...",
+        "similarity": 0.85,
+        "contradiction_reason": "States opposite preference"
+      }
+    ],
+    "edges_created": 1
+  }
+}
+```
+
+---
+
+### Tool: memory_check_supersedes
+
+Check if a memory should supersede another.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "memory_id": {
+      "type": "string",
+      "description": "ID of the (potentially newer) memory to check"
+    },
+    "create_edge": {
+      "type": "boolean",
+      "description": "Whether to create SUPERSEDES edge",
+      "default": true
+    }
+  },
+  "required": ["memory_id"]
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "superseded_id": "mem_old123",
+    "edge_created": true
+  }
+}
+```
+
+---
+
+### Tool: memory_analyze_health
+
+Analyze the health of memories in the system.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "description": "Limit analysis to specific namespace"
+    },
+    "include_contradictions": {
+      "type": "boolean",
+      "description": "Check for contradictions",
+      "default": true
+    },
+    "include_low_confidence": {
+      "type": "boolean",
+      "description": "Find low-confidence memories",
+      "default": true
+    },
+    "include_stale": {
+      "type": "boolean",
+      "description": "Find stale memories",
+      "default": true
+    },
+    "stale_days": {
+      "type": "integer",
+      "description": "Days without validation to consider stale",
+      "default": 30
+    }
+  }
+}
+```
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "contradictions": [
+      {"id1": "mem_a", "id2": "mem_b", "similarity": 0.9}
+    ],
+    "low_confidence": [
+      {"id": "mem_c", "confidence": 0.1}
+    ],
+    "stale": [
+      {"id": "mem_d", "last_validated": "2025-11-01T00:00:00Z"}
+    ],
+    "recommendations": [
+      "Resolve 2 contradictions",
+      "Review 5 low-confidence memories"
+    ]
+  }
+}
 ```
 
 ---

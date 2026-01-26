@@ -152,14 +152,10 @@ class MLXProvider:
                     for emb in embeddings
                 ]
 
-            # Clear MLX cache to prevent GPU memory accumulation across batches
-            # Without this, intermediate tensors accumulate and can consume 18+ GB
-            try:
-                import mlx.core as mx
-
-                mx.clear_cache()
-            except Exception:
-                pass  # Non-critical - just memory optimization
+            # NOTE: Do NOT call mx.clear_cache() here - it causes Metal race conditions
+            # when used with asyncio.to_thread(). The error manifests as:
+            # "-[_MTLCommandBuffer addCompletedHandler:]:976: failed assertion"
+            # Memory will be managed by Python GC and MLX's internal cache management.
 
             return result
         except EmbeddingError:
@@ -258,12 +254,14 @@ class MLXProvider:
     def close(self) -> None:
         """Release resources held by the provider.
 
-        Clears the model from memory.
+        Clears the model from memory and releases GPU resources.
         """
         if self._model_instance is not None:
             # Clear references to allow garbage collection
             self._model_instance = None
             self._tokenizer = None
+            # NOTE: Do NOT call mx.clear_cache() here - it causes Metal race conditions
+            # See _generate_embedding_sync() for details.
             logger.debug("MLX provider resources released")
 
     async def embed_batch(
@@ -271,9 +269,13 @@ class MLXProvider:
     ) -> list[list[float]]:
         """Async batch embedding for daemon workers.
 
-        NOTE: MLX uses Metal GPU which requires main thread execution.
-        This runs synchronously and briefly blocks the event loop (~50-100ms).
-        This is acceptable because MLX is fast and the daemon isn't latency-critical.
+        IMPORTANT: MLX Metal is NOT thread-safe. Metal command buffers crash
+        when accessed from multiple threads (asyncio.to_thread causes this).
+        This method runs synchronously on the main thread, briefly blocking
+        the event loop (~50-100ms per batch). This is acceptable because:
+        - The daemon isn't latency-critical (background processing)
+        - MLX is fast enough that blocking is minimal
+        - This is the only reliable approach without process isolation
 
         Args:
             texts: List of texts to embed.
@@ -287,7 +289,7 @@ class MLXProvider:
             EmbeddingError: If embedding generation fails.
             ValueError: If texts list is empty.
         """
-        # Run sync on main thread - Metal GPU requires this
+        # Run synchronously - MLX Metal crashes with thread pool executors
         if is_query:
             prefixed_texts = [
                 f"{EMBED_PREFIX}{t}" if self._is_mxbai else t for t in texts

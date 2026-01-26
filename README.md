@@ -17,6 +17,7 @@
 - [Configuration](#configuration)
 - [Architecture](#architecture)
 - [API Reference](#api-reference)
+- [Claude Code Skills](#claude-code-skills)
 - [Migration Guide](#migration-guide)
 - [Development](#development)
 - [Troubleshooting](#troubleshooting)
@@ -72,7 +73,7 @@ uv sync --dev
 
 ### MCP Configuration
 
-Add to your Claude Code MCP config (`~/.claude/config/mcp.json` or via Claude Code settings):
+Add to your MCP config:
 
 ```json
 {
@@ -241,31 +242,68 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 
 ## API Reference
 
-Theo exposes 14 MCP tools:
+Theo exposes 25 MCP tools:
 
-### Document Tools
+### Document Tools (2)
 - `index_file(file_path, namespace)` - Index a single document
 - `index_directory(dir_path, recursive, namespace)` - Batch index documents
 
-### Search Tools
+### Search Tools (3)
 - `search(query, n_results)` - Basic semantic search
 - `search_with_filters(query, filters, n_results)` - Filtered search
 - `search_with_budget(query, max_tokens)` - Token-budget search
 
-### Memory Tools
+### Memory Tools (16)
 - `memory_store(content, memory_type, namespace, importance)` - Store memory
 - `memory_recall(query, n_results, namespace, memory_type)` - Recall memories
 - `memory_validate(memory_id, was_helpful, context)` - Validate memory
 - `memory_forget(memory_id, query, force)` - Delete memories
 - `memory_context(query, namespace, token_budget)` - Generate LLM context
+- `memory_apply(memory_id, context)` - Record memory usage (TRY phase)
+- `memory_outcome(memory_id, success, error_msg)` - Record result (LEARN phase)
+- `memory_relate(source_id, target_id, relation_type)` - Create relationships
+- `memory_edge_forget(source_id, target_id)` - Delete relationship edges
+- `memory_inspect_graph(memory_id, max_depth, output_format)` - Visualize graph
+- `memory_count(namespace, memory_type)` - Count memories with filters
+- `memory_list(namespace, memory_type, limit)` - List memories with pagination
+- `validation_history(memory_id, event_type, limit)` - Get validation timeline
+- `memory_detect_contradictions(memory_id, threshold)` - Find conflicts
+- `memory_check_supersedes(memory_id)` - Check if memory supersedes another
+- `memory_analyze_health(namespace)` - Analyze memory system health
 
-### Management Tools
+### Management Tools (4)
 - `delete_chunks(ids)` - Delete specific chunks
 - `delete_file(source_file)` - Delete file's chunks
 - `clear_index(confirm)` - Clear everything (requires confirmation)
 - `get_index_stats()` - Get collection statistics
 
 See [docs/API.md](docs/API.md) for complete API specifications.
+
+[↑ Back to top](#table-of-contents)
+
+## Claude Code Skills
+
+Theo provides 9 Claude Code skills for convenient CLI access:
+
+| Skill | Description | Example |
+|-------|-------------|---------|
+| `/index` | Index files or directories | `/index ~/Documents/project` |
+| `/search` | Semantic search across indexed docs | `/search authentication flow` |
+| `/stats` | Show index and memory statistics | `/stats` |
+| `/validate` | TRY-LEARN validation cycle | `/validate mem_abc123 success` |
+| `/contradictions` | Detect conflicting memories | `/contradictions mem_abc123` |
+| `/context` | Get formatted context for LLM injection | `/context authentication --budget 2000` |
+| `/health` | Analyze memory system health | `/health` |
+| `/history` | View validation event timeline | `/history mem_abc123` |
+| `/graph` | Visualize memory relationships | `/graph mem_abc123 --format mermaid` |
+
+### Installing Skills
+
+Skills are located in `skills/` directory. Copy to your Claude Code skills folder:
+
+```bash
+cp -r skills/* ~/.claude/skills/
+```
 
 [↑ Back to top](#table-of-contents)
 
@@ -375,6 +413,46 @@ Golden rules (confidence >= 0.9) are protected. Use `force=true`:
 ```
 "Forget memory mem_123 with force"
 ```
+
+### MLX Metal Threading Crash
+
+**Error**: `-[_MTLCommandBuffer addCompletedHandler:]:976: failed assertion` or SIGSEGV (exit 139)
+
+**Cause**: MLX Metal GPU operations are NOT thread-safe. Using `asyncio.to_thread()` with MLX causes Metal command buffer race conditions.
+
+**Solution**:
+1. MLX embedding operations MUST run on the main thread
+2. The `embed_batch()` method runs synchronously by design - do NOT wrap with `asyncio.to_thread()`
+3. Never call `mx.clear_cache()` during embedding operations - it clears Metal buffers while other operations expect them
+4. If running as a daemon, ensure the embedding worker uses the main asyncio event loop
+
+**Prevention**: The daemon's embed_worker is designed to briefly block the event loop (~50-100ms per batch) rather than use thread pools. This is the only reliable approach without process isolation.
+
+### ChromaDB FTS5 Corruption
+
+**Error**: `PRAGMA integrity_check` shows FTS5 corruption warnings, or searches return incorrect/empty results
+
+**Cause**: ChromaDB's FTS5 (full-text search) index can become corrupted after crashes, improper shutdowns, or database upgrades.
+
+**Solution**:
+```bash
+# Connect to the ChromaDB SQLite database
+sqlite3 ~/.theo/chroma_db/chroma.sqlite3
+
+# Rebuild the FTS5 index
+INSERT INTO embedding_fulltext_search(embedding_fulltext_search) VALUES('rebuild');
+
+# Verify the fix
+PRAGMA integrity_check;
+
+# Exit
+.quit
+```
+
+**Prevention**:
+1. Always gracefully shutdown the daemon: `python -m theo.daemon.server --stop`
+2. After system crashes, run the FTS5 rebuild command above
+3. If corruption persists, delete `~/.theo/chroma_db/` and re-index
 
 [↑ Back to top](#table-of-contents)
 

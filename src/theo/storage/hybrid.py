@@ -77,6 +77,7 @@ class HybridStore:
         ephemeral: bool = False,
         embedding_backend: EmbeddingBackend = "mlx",
         mlx_model: str = "mlx-community/mxbai-embed-large-v1",
+        embedding_client: Optional[EmbeddingProvider] = None,
     ) -> "HybridStore":
         """Create a HybridStore with new component instances.
 
@@ -92,6 +93,8 @@ class HybridStore:
             ephemeral: Use in-memory storage for testing (default: False)
             embedding_backend: Embedding backend to use ('ollama' or 'mlx')
             mlx_model: MLX model identifier (used when embedding_backend='mlx')
+            embedding_client: Optional existing EmbeddingProvider to reuse
+                (avoids creating duplicate Metal contexts on Apple Silicon)
 
         Returns:
             Configured HybridStore instance
@@ -111,12 +114,14 @@ class HybridStore:
                 collection_name=collection_name,
                 ephemeral=ephemeral,
             )
-            embedding_client = create_embedding_provider(
-                backend=embedding_backend,
-                host=ollama_host,
-                model=ollama_model,
-                mlx_model=mlx_model,
-            )
+            # Use provided embedding client or create new one
+            if embedding_client is None:
+                embedding_client = create_embedding_provider(
+                    backend=embedding_backend,
+                    host=ollama_host,
+                    model=ollama_model,
+                    mlx_model=mlx_model,
+                )
 
             return cls(
                 chroma_store=chroma_store,
