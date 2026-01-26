@@ -414,6 +414,46 @@ Golden rules (confidence >= 0.9) are protected. Use `force=true`:
 "Forget memory mem_123 with force"
 ```
 
+### MLX Metal Threading Crash
+
+**Error**: `-[_MTLCommandBuffer addCompletedHandler:]:976: failed assertion` or SIGSEGV (exit 139)
+
+**Cause**: MLX Metal GPU operations are NOT thread-safe. Using `asyncio.to_thread()` with MLX causes Metal command buffer race conditions.
+
+**Solution**:
+1. MLX embedding operations MUST run on the main thread
+2. The `embed_batch()` method runs synchronously by design - do NOT wrap with `asyncio.to_thread()`
+3. Never call `mx.clear_cache()` during embedding operations - it clears Metal buffers while other operations expect them
+4. If running as a daemon, ensure the embedding worker uses the main asyncio event loop
+
+**Prevention**: The daemon's embed_worker is designed to briefly block the event loop (~50-100ms per batch) rather than use thread pools. This is the only reliable approach without process isolation.
+
+### ChromaDB FTS5 Corruption
+
+**Error**: `PRAGMA integrity_check` shows FTS5 corruption warnings, or searches return incorrect/empty results
+
+**Cause**: ChromaDB's FTS5 (full-text search) index can become corrupted after crashes, improper shutdowns, or database upgrades.
+
+**Solution**:
+```bash
+# Connect to the ChromaDB SQLite database
+sqlite3 ~/.theo/chroma_db/chroma.sqlite3
+
+# Rebuild the FTS5 index
+INSERT INTO embedding_fulltext_search(embedding_fulltext_search) VALUES('rebuild');
+
+# Verify the fix
+PRAGMA integrity_check;
+
+# Exit
+.quit
+```
+
+**Prevention**:
+1. Always gracefully shutdown the daemon: `python -m theo.daemon.server --stop`
+2. After system crashes, run the FTS5 rebuild command above
+3. If corruption persists, delete `~/.theo/chroma_db/` and re-index
+
 [↑ Back to top](#table-of-contents)
 
 ## License
