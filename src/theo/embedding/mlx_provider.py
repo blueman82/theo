@@ -269,8 +269,13 @@ class MLXProvider:
     ) -> list[list[float]]:
         """Async batch embedding for daemon workers.
 
-        Uses asyncio.to_thread() to run MLX embedding in a thread pool,
-        avoiding blocking the async event loop.
+        IMPORTANT: MLX Metal is NOT thread-safe. Metal command buffers crash
+        when accessed from multiple threads (asyncio.to_thread causes this).
+        This method runs synchronously on the main thread, briefly blocking
+        the event loop (~50-100ms per batch). This is acceptable because:
+        - The daemon isn't latency-critical (background processing)
+        - MLX is fast enough that blocking is minimal
+        - This is the only reliable approach without process isolation
 
         Args:
             texts: List of texts to embed.
@@ -284,12 +289,11 @@ class MLXProvider:
             EmbeddingError: If embedding generation fails.
             ValueError: If texts list is empty.
         """
-        import asyncio
-
+        # Run synchronously - MLX Metal crashes with thread pool executors
         if is_query:
             prefixed_texts = [
                 f"{EMBED_PREFIX}{t}" if self._is_mxbai else t for t in texts
             ]
-            return await asyncio.to_thread(self._generate_embedding_sync, prefixed_texts)
+            return self._generate_embedding_sync(prefixed_texts)
         else:
-            return await asyncio.to_thread(self.embed_texts, texts)
+            return self.embed_texts(texts)
