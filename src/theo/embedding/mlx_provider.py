@@ -280,9 +280,9 @@ class MLXProvider:
     ) -> list[list[float]]:
         """Async batch embedding for daemon workers.
 
-        NOTE: MLX uses Metal GPU which requires main thread execution.
-        This runs synchronously and briefly blocks the event loop (~50-100ms).
-        This is acceptable because MLX is fast and the daemon isn't latency-critical.
+        NOTE: MLX uses Metal GPU. We run the sync embedding in a thread pool
+        executor to avoid blocking the asyncio event loop and to isolate
+        Metal GPU operations from the async context.
 
         Args:
             texts: List of texts to embed.
@@ -296,11 +296,16 @@ class MLXProvider:
             EmbeddingError: If embedding generation fails.
             ValueError: If texts list is empty.
         """
-        # Run sync on main thread - Metal GPU requires this
+        import asyncio
+
+        # Run sync MLX code in thread pool to isolate from async context
+        loop = asyncio.get_running_loop()
         if is_query:
             prefixed_texts = [
                 f"{EMBED_PREFIX}{t}" if self._is_mxbai else t for t in texts
             ]
-            return self._generate_embedding_sync(prefixed_texts)
+            return await loop.run_in_executor(
+                None, self._generate_embedding_sync, prefixed_texts
+            )
         else:
-            return self.embed_texts(texts)
+            return await loop.run_in_executor(None, self.embed_texts, texts)
