@@ -327,16 +327,21 @@ def read_backup_direct_sqlite(backup_path: Path) -> list[dict]:
     collections = cursor.fetchall()
     log(f"  Found collections: {[(c['id'], c['name']) for c in collections]}")
     
-    # Get segment info  
-    cursor.execute("SELECT id, collection FROM segments WHERE scope = 'VECTOR'")
+    # Get segment info - embeddings are in METADATA segment
+    cursor.execute("SELECT id, scope FROM segments")
     segments = cursor.fetchall()
-    log(f"  Found vector segments: {len(segments)}")
+    log(f"  Found segments: {[(s['id'], s['scope']) for s in segments]}")
     
-    if not segments:
-        log("  Warning: No vector segments found")
+    # Find the segment that has embeddings
+    cursor.execute("SELECT segment_id, COUNT(*) as cnt FROM embeddings GROUP BY segment_id")
+    emb_segments = cursor.fetchall()
+    log(f"  Embeddings by segment: {[(s['segment_id'], s['cnt']) for s in emb_segments]}")
+    
+    if not emb_segments:
+        log("  Warning: No embeddings found in any segment")
         return []
     
-    segment_id = segments[0]['id']
+    segment_id = emb_segments[0]['segment_id']
     
     # Read embeddings table
     log("  Reading embeddings...")
