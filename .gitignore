@@ -1,6 +1,11 @@
 # Project specific
 .conductor/
 logs/
+chroma_db/
+*.db
+CHANGELOG*
+.serena/
+~/
 
 # OS files
 .DS_Store
@@ -39,19 +44,21 @@ __pycache__/
 *$py.class
 .Python
 *.so
-.env
 .venv/
 venv/
 ENV/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+*.egg-info/
+
+# UV
+uv.lock
 
 # Build outputs
 dist/
 build/
 out/
-*.egg-info/
 target/
 
 # Environment and secrets

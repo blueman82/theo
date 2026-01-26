@@ -1,0 +1,385 @@
+# Theo
+
+**Unified AI memory and document retrieval system** - merging the capabilities of DocVec (semantic document indexing) and Recall (long-term memory) into a single MCP server.
+
+## Table of Contents
+
+- [Features](#features)
+- [Quick Start](#quick-start)
+  - [Prerequisites](#prerequisites)
+  - [Installation](#installation)
+  - [MCP Configuration](#mcp-configuration)
+- [Basic Usage](#basic-usage)
+  - [Document Indexing](#document-indexing)
+  - [Semantic Search](#semantic-search)
+  - [Memory Operations](#memory-operations)
+  - [Managing the Index](#managing-the-index)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [API Reference](#api-reference)
+- [Migration Guide](#migration-guide)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+## Features
+
+### Document Indexing (from DocVec)
+- **Multi-format Support**: Index markdown, PDF, text, and Python code files
+- **Smart Chunking**:
+  - Header-aware chunking for markdown documents
+  - Page-aware chunking for PDFs
+  - AST-based chunking for Python code
+  - Paragraph-based chunking for plain text
+- **Hash-based Deduplication**: Automatic detection and skipping of duplicate documents
+
+### Long-term Memory (from Recall)
+- **Memory Types**: Store preferences, decisions, patterns, facts, and session context
+- **Validation Loop**: Memories build confidence through practical use
+- **Golden Rules**: High-confidence memories become protected principles
+- **Namespace Scoping**: Organize memories by project or globally
+
+### Unified Capabilities
+- **Local Embeddings**: Privacy-first using MLX (Apple Silicon) or Ollama
+- **Daemon Service**: Non-blocking embedding via Unix socket IPC
+- **Token-aware Retrieval**: Control result size to fit within token budgets
+- **MCP Integration**: Seamless integration with Claude Code and other MCP clients
+
+[↑ Back to top](#table-of-contents)
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.11 or higher
+- [uv](https://docs.astral.sh/uv/) package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
+- Apple Silicon Mac (for MLX backend, default) OR [Ollama](https://ollama.ai) installed
+- 2GB+ free disk space for ChromaDB and model cache
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/your-org/theo.git
+cd theo
+
+# Install dependencies using uv
+uv sync
+
+# Install dev dependencies (optional)
+uv sync --dev
+```
+
+### MCP Configuration
+
+Add to your Claude Code MCP config (`~/.claude/config/mcp.json` or via Claude Code settings):
+
+```json
+{
+  "mcpServers": {
+    "theo": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "theo"],
+      "cwd": "/path/to/theo",
+      "env": {
+        "THEO_DB_PATH": "~/.theo/chroma_db"
+      }
+    }
+  }
+}
+```
+
+**Important:** Replace `/path/to/theo` with the actual path where you cloned the repo.
+
+Verify the setup:
+```bash
+# Restart Claude Code to load the MCP server
+# Then ask Claude:
+"What's in the Theo index? Use get_index_stats"
+```
+
+[↑ Back to top](#table-of-contents)
+
+## Basic Usage
+
+### Document Indexing
+
+Index a single file:
+```
+"Index /path/to/document.md"
+```
+
+Index a directory:
+```
+"Index all files in /path/to/docs recursively"
+```
+
+Index with namespace:
+```
+"Index /path/to/project using namespace 'project:myproject'"
+```
+
+### Semantic Search
+
+Basic search:
+```
+"Search for authentication configuration"
+```
+
+Search with filters:
+```
+"Search for API endpoints in the docs namespace"
+```
+
+Token-budget search:
+```
+"Search for deployment guide within 2000 tokens"
+```
+
+### Memory Operations
+
+Store a memory:
+```
+"Remember that I prefer using FastAPI for Python APIs"
+```
+
+Store with explicit type:
+```
+"Store a decision: We chose PostgreSQL for the database"
+```
+
+Recall memories:
+```
+"What do you remember about my coding preferences?"
+```
+
+Validate a memory:
+```
+"That memory about FastAPI was helpful - validate it"
+```
+
+Delete a memory:
+```
+"Forget the memory about dark mode preferences"
+```
+
+### Managing the Index
+
+Get statistics:
+```
+"Show me the Theo index stats"
+```
+
+Delete a file from index:
+```
+"Remove /path/to/old_document.md from the index"
+```
+
+Clear everything (requires confirmation):
+```
+"Clear the entire Theo index (confirm=true)"
+```
+
+[↑ Back to top](#table-of-contents)
+
+## Configuration
+
+Configuration via CLI arguments (highest priority) or environment variables with `THEO_` prefix:
+
+| Environment Variable | CLI Argument | Default | Description |
+|---------------------|--------------|---------|-------------|
+| `THEO_EMBEDDING_BACKEND` | `--embedding-backend` | `mlx` | Backend: `mlx` or `ollama` |
+| `THEO_MLX_MODEL` | `--mlx-model` | `mlx-community/mxbai-embed-large-v1` | MLX model |
+| `THEO_OLLAMA_HOST` | `--ollama-host` | `http://localhost:11434` | Ollama server URL |
+| `THEO_OLLAMA_MODEL` | `--ollama-model` | `nomic-embed-text` | Ollama model |
+| `THEO_OLLAMA_TIMEOUT` | `--ollama-timeout` | `30` | Timeout in seconds |
+| `THEO_DB_PATH` | `--db-path` | `~/.theo/chroma_db` | ChromaDB storage path |
+| `THEO_COLLECTION` | `--collection` | `documents` | Collection name |
+| `THEO_LOG_LEVEL` | `--log-level` | `INFO` | Logging level |
+
+[↑ Back to top](#table-of-contents)
+
+## Architecture
+
+Theo combines three key capabilities:
+
+1. **Document Indexing Pipeline**: File → Chunker → Embedder → ChromaDB
+2. **Memory System**: Store → Validate → Recall with confidence scoring
+3. **Daemon Service**: Non-blocking IPC for embedding operations
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Claude Code    │────▶│   MCP Server    │────▶│   Tool Layer    │
+│  (MCP Client)   │     │   (FastMCP)     │     │  (Async Handlers)│
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+                    ┌────────────────────────────────────┼────────────────────┐
+                    │                                    │                    │
+              ┌─────▼─────┐                      ┌───────▼───────┐    ┌───────▼───────┐
+              │ Indexing  │                      │   Memory      │    │   Query       │
+              │   Tools   │                      │   Tools       │    │   Tools       │
+              └─────┬─────┘                      └───────┬───────┘    └───────┬───────┘
+                    │                                    │                    │
+                    └────────────────┬───────────────────┴────────────────────┘
+                                     │
+                              ┌──────▼──────┐
+                              │   Daemon    │
+                              │   Client    │
+                              └──────┬──────┘
+                                     │
+              ┌──────────────────────┼──────────────────────┐
+              │                      │                      │
+        ┌─────▼─────┐         ┌──────▼──────┐        ┌──────▼──────┐
+        │ Chunkers  │         │  Embedding  │        │  ChromaDB   │
+        │ Registry  │         │  Provider   │        │   Store     │
+        └───────────┘         └─────────────┘        └─────────────┘
+```
+
+See [docs/architecture.md](docs/architecture.md) for detailed architecture documentation.
+
+[↑ Back to top](#table-of-contents)
+
+## API Reference
+
+Theo exposes 14 MCP tools:
+
+### Document Tools
+- `index_file(file_path, namespace)` - Index a single document
+- `index_directory(dir_path, recursive, namespace)` - Batch index documents
+
+### Search Tools
+- `search(query, n_results)` - Basic semantic search
+- `search_with_filters(query, filters, n_results)` - Filtered search
+- `search_with_budget(query, max_tokens)` - Token-budget search
+
+### Memory Tools
+- `memory_store(content, memory_type, namespace, importance)` - Store memory
+- `memory_recall(query, n_results, namespace, memory_type)` - Recall memories
+- `memory_validate(memory_id, was_helpful, context)` - Validate memory
+- `memory_forget(memory_id, query, force)` - Delete memories
+- `memory_context(query, namespace, token_budget)` - Generate LLM context
+
+### Management Tools
+- `delete_chunks(ids)` - Delete specific chunks
+- `delete_file(source_file)` - Delete file's chunks
+- `clear_index(confirm)` - Clear everything (requires confirmation)
+- `get_index_stats()` - Get collection statistics
+
+See [docs/API.md](docs/API.md) for complete API specifications.
+
+[↑ Back to top](#table-of-contents)
+
+## Migration Guide
+
+If you're migrating from DocVec or Recall, see [docs/migration.md](docs/migration.md) for:
+- Configuration changes
+- Tool name mappings
+- Data migration strategies
+- Breaking changes
+
+[↑ Back to top](#table-of-contents)
+
+## Development
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest tests/ -v
+
+# Run with coverage
+uv run pytest tests/ -v --cov=src/theo --cov-report=html
+
+# Run integration tests
+uv run pytest tests/integration/ -v
+```
+
+### Code Quality
+
+```bash
+# Format code
+uv run black src/ tests/
+
+# Lint code
+uv run ruff check src/ tests/
+
+# Type checking
+uv run mypy src/
+
+# Sort imports
+uv run isort src/ tests/
+```
+
+### Running the MCP Server
+
+```bash
+# Run with default configuration (MLX backend)
+uv run python -m theo
+
+# Run with Ollama backend
+uv run python -m theo --embedding-backend ollama
+
+# Run with debug logging
+uv run python -m theo --log-level DEBUG
+
+# View all options
+uv run python -m theo --help
+```
+
+[↑ Back to top](#table-of-contents)
+
+## Troubleshooting
+
+### MLX Model Download Failed
+
+**Error**: `Failed to download MLX model` or slow first-run
+
+**Solution**:
+1. First run downloads ~500MB model from HuggingFace
+2. Ensure internet connectivity and sufficient disk space
+3. Model cached at `~/.cache/huggingface/` after first download
+
+### Ollama Connection Failed
+
+**Error**: `Failed to connect to Ollama`
+
+**Solution** (only applies when using `--embedding-backend ollama`):
+1. Check if Ollama is running: `ollama list`
+2. Start Ollama if needed: `ollama serve`
+3. Pull the embedding model: `ollama pull nomic-embed-text`
+
+### ChromaDB Permission Error
+
+**Error**: `Permission denied: ~/.theo/chroma_db`
+
+**Solution**:
+1. Create directory: `mkdir -p ~/.theo/chroma_db`
+2. Fix permissions: `chmod 755 ~/.theo`
+3. Or specify different path via `THEO_DB_PATH`
+
+### Search Returns No Results
+
+**Issue**: Search returns empty despite indexed documents
+
+**Solution**:
+1. Verify documents were indexed: `get_index_stats`
+2. Check namespace matches: search may be filtered by namespace
+3. Try broader queries with fewer terms
+
+### Can't Delete Golden Rules
+
+**Issue**: Memory deletion fails for high-confidence memories
+
+**Solution**:
+Golden rules (confidence >= 0.9) are protected. Use `force=true`:
+```
+"Forget memory mem_123 with force"
+```
+
+[↑ Back to top](#table-of-contents)
+
+## License
+
+MIT License - see LICENSE file for details.
+
+[↑ Back to top](#table-of-contents)

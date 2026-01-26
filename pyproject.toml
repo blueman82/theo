@@ -1,0 +1,86 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "theo"
+version = "0.1.0"
+description = "Unified AI memory and document retrieval system - merging DocVec and Recall"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    # MCP Protocol
+    "mcp[cli]>=1.2.0",
+    # Vector Storage
+    "chromadb>=0.4.0",
+    # Embeddings - Apple Silicon optimized
+    "mlx-embeddings>=0.0.5",
+    # HTTP & API
+    "httpx>=0.27.0",
+    "requests>=2.31.0",
+    # Data Validation
+    "pydantic>=2.0.0",
+    "pydantic-settings>=2.0.0",
+    # Document Processing
+    "pypdf>=3.0.0",
+    "python-dotenv>=1.2.1",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=9.0.1",
+    "pytest-asyncio>=0.24.0",
+    "pytest-cov>=7.0.0",
+    "pytest-httpx>=0.32.0",
+    "pytest-mock>=3.14.0",
+    # Code Quality
+    "black>=25.12.0",
+    "ruff>=0.14.10",
+    "mypy>=1.8.0",
+    "isort>=7.0.0",
+    "types-requests>=2.31.0",
+    "pydocstyle>=6.3.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/theo"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+pythonpath = ["src"]
+
+[tool.mypy]
+python_version = "3.13"
+warn_return_any = true
+warn_unused_configs = true
+strict = false
+ignore_missing_imports = false
+
+[[tool.mypy.overrides]]
+module = [
+    "chromadb.*",
+    "pypdf.*",
+    "pydantic_settings",
+    "mcp.*",
+    "mlx_embeddings.*",
+]
+ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+select = ["E", "F", "I", "W"]
+
+[tool.black]
+target-version = ["py313"]
+line-length = 100
+
+[tool.isort]
+profile = "black"
+line_length = 100
