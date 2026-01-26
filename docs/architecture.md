@@ -334,6 +334,8 @@ class EmbeddingProvider(Protocol):
 - Model: mxbai-embed-large-v1 (default)
 - No external server required
 
+**Thread Safety**: MLX Metal is NOT thread-safe. All MLX operations must run on the main thread. The `embed_batch()` method runs synchronously by design - do NOT use `asyncio.to_thread()`. Never call `mx.clear_cache()` during embedding operations.
+
 #### Ollama Provider (Alternative)
 
 **Implementation**: `src/theo/embedding/ollama_provider.py`
