@@ -73,7 +73,7 @@ uv sync --dev
 
 ### MCP Configuration
 
-Add to your Claude Code MCP config (`~/.claude/config/mcp.json` or via Claude Code settings):
+Add to your MCP config:
 
 ```json
 {
