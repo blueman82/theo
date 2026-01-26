@@ -173,15 +173,41 @@ def read_backup_via_chromadb(backup_path: Path) -> list[dict]:
 def write_to_theo(records: list[dict], dry_run: bool = False) -> int:
     """Write records to fresh theo ChromaDB.
     
+    Re-generates embeddings for records that don't have them.
+    
     Returns:
         Number of records written
     """
     import chromadb
     from chromadb.config import Settings
     
+    # Check how many need re-embedding
+    needs_embedding = [r for r in records if r.get("embedding") is None and r.get("document")]
+    has_embedding = [r for r in records if r.get("embedding") is not None]
+    
+    log(f"  Records with embeddings: {len(has_embedding)}")
+    log(f"  Records needing re-embedding: {len(needs_embedding)}")
+    
     if dry_run:
         log(f"DRY RUN: Would write {len(records)} records to {THEO_CHROMA_PATH}")
         return len(records)
+    
+    # Load embedding provider if needed
+    embedding_provider = None
+    if needs_embedding:
+        log("  Loading MLX embedding provider...")
+        try:
+            from theo.embedding.factory import create_embedding_provider
+            embedding_provider = create_embedding_provider("mlx")
+            log("    MLX provider loaded")
+        except Exception as e:
+            log(f"    Warning: MLX failed ({e}), trying Ollama...")
+            try:
+                embedding_provider = create_embedding_provider("ollama")
+                log("    Ollama provider loaded")
+            except Exception as e2:
+                log(f"    ERROR: No embedding provider available: {e2}")
+                log("    Records without embeddings will be skipped!")
     
     log(f"Opening theo ChromaDB at {THEO_CHROMA_PATH}...")
     
@@ -202,7 +228,7 @@ def write_to_theo(records: list[dict], dry_run: bool = False) -> int:
     log(f"  Writing to collection 'documents'...")
     
     # Batch write for efficiency
-    batch_size = 500
+    batch_size = 100  # Smaller batches for re-embedding
     written = 0
     skipped = 0
     
@@ -214,15 +240,40 @@ def write_to_theo(records: list[dict], dry_run: bool = False) -> int:
         metadatas = []
         documents = []
         
-        for record in batch:
-            if record.get("embedding") is None:
+        # Collect texts that need embedding
+        texts_to_embed = []
+        text_indices = []
+        
+        for j, record in enumerate(batch):
+            doc = record.get("document", "")
+            if not doc:
                 skipped += 1
                 continue
-                
-            ids.append(record["id"])
-            embeddings.append(record["embedding"])
-            metadatas.append(record.get("metadata", {}))
-            documents.append(record.get("document", ""))
+            
+            if record.get("embedding") is not None:
+                ids.append(record["id"])
+                embeddings.append(record["embedding"])
+                metadatas.append(record.get("metadata", {}))
+                documents.append(doc)
+            elif embedding_provider:
+                texts_to_embed.append(doc[:1000])  # Truncate for embedding
+                text_indices.append(j)
+            else:
+                skipped += 1
+        
+        # Generate missing embeddings
+        if texts_to_embed and embedding_provider:
+            try:
+                new_embeddings = embedding_provider.embed_texts(texts_to_embed)
+                for idx, emb in zip(text_indices, new_embeddings):
+                    record = batch[idx]
+                    ids.append(record["id"])
+                    embeddings.append(emb)
+                    metadatas.append(record.get("metadata", {}))
+                    documents.append(record.get("document", ""))
+            except Exception as e:
+                log(f"    Embedding error: {e}")
+                skipped += len(texts_to_embed)
         
         if ids:
             try:
@@ -249,8 +300,8 @@ def write_to_theo(records: list[dict], dry_run: bool = False) -> int:
                         log(f"    Skipping {id_}: {e2}")
                         skipped += 1
         
-        if (i + batch_size) % 5000 == 0:
-            log(f"  Progress: {written} written, {skipped} skipped")
+        if (i + batch_size) % 1000 == 0 or i + batch_size >= len(records):
+            log(f"  Progress: {written} written, {skipped} skipped ({i + batch_size}/{len(records)})")
     
     log(f"  Complete: {written} written, {skipped} skipped")
     return written
