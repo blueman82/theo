@@ -480,6 +480,7 @@ def read_backup_direct_sqlite(backup_path: Path) -> list[dict]:
 def main():
     parser = argparse.ArgumentParser(description="Migrate data from ChromaDB backup")
     parser.add_argument("--dry-run", action="store_true", help="Don't actually write data")
+    parser.add_argument("--yes", "-y", action="store_true", help="Auto-confirm prompts")
     parser.add_argument("--backup-path", type=Path, default=DEFAULT_BACKUP, 
                         help=f"Path to backup (default: {DEFAULT_BACKUP})")
     args = parser.parse_args()
