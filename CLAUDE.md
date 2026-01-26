@@ -20,6 +20,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Token-efficient**: Smart chunking and retrieval to minimize context usage
 - **Validation-driven**: Memories build confidence through practical use
 
+## Validation Loop (ELF-Inspired)
+
+Theo implements a validation loop to build confidence in memories through practical use:
+
+```
+TRY → BREAK → ANALYZE → LEARN
+ ↑                        ↓
+ └────────────────────────┘
+```
+
 ## Development Commands
 
 ### Environment Setup
