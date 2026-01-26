@@ -185,7 +185,7 @@ def test_something(mock_embedder, temp_chroma):
 
 ## Configuration
 
-Settings via environment variables with `THEO_` prefix (planned):
+Settings via environment variables with `THEO_` prefix:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
