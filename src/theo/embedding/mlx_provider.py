@@ -258,12 +258,21 @@ class MLXProvider:
     def close(self) -> None:
         """Release resources held by the provider.
 
-        Clears the model from memory.
+        Clears the model from memory and releases GPU resources.
         """
         if self._model_instance is not None:
             # Clear references to allow garbage collection
             self._model_instance = None
             self._tokenizer = None
+
+            # Clear MLX Metal cache to release GPU memory and multiprocessing resources
+            # This prevents semaphore leaks on process exit
+            try:
+                import mlx.core as mx
+                mx.clear_cache()
+            except Exception:
+                pass  # Non-critical if MLX not available
+
             logger.debug("MLX provider resources released")
 
     async def embed_batch(
