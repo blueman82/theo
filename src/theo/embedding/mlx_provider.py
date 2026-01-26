@@ -260,15 +260,8 @@ class MLXProvider:
             # Clear references to allow garbage collection
             self._model_instance = None
             self._tokenizer = None
-
-            # Clear MLX Metal cache to release GPU memory and multiprocessing resources
-            # This prevents semaphore leaks on process exit
-            try:
-                import mlx.core as mx
-                mx.clear_cache()
-            except Exception:
-                pass  # Non-critical if MLX not available
-
+            # NOTE: Do NOT call mx.clear_cache() here - it causes Metal race conditions
+            # See _generate_embedding_sync() for details.
             logger.debug("MLX provider resources released")
 
     async def embed_batch(
