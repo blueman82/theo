@@ -54,18 +54,25 @@ def mock_daemon_client():
 def mock_store():
     """Create a mock SQLiteStore for testing."""
     store = MagicMock()
-    # Default stats
-    store.get_stats.return_value = StoreStats(
-        total_documents=10,
-        unique_sources=5,
-        source_files=["/path/to/file1.md", "/path/to/file2.py"],
-        namespaces=["default", "project1"],
-        memory_types={"document": 8, "memory": 2},
-    )
-    store.count.return_value = 10
-    store.get.return_value = {"ids": [], "documents": [], "metadatas": []}
+    # Mock methods used by ManagementTools.get_stats
+    store.count_memories.return_value = 10
+    store.count_edges.return_value = 5
+    store.list_memories.return_value = [
+        {"id": "1", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
+        {"id": "2", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
+        {"id": "3", "memory_type": "memory", "source_file": None, "namespace": "default"},
+        {"id": "4", "memory_type": "document", "source_file": "/path/to/file2.py", "namespace": "project1"},
+    ]
+    # Mock methods used by IndexingTools
     store.get_by_hash.return_value = None
     store.get_by_source_file.return_value = None
+    store.add_memory.return_value = []
+    # Mock methods used by QueryTools - search_vector for vector search
+    store.search_vector.return_value = []
+    # Mock methods used by MemoryTools - search_hybrid for memory recall
+    store.search_hybrid.return_value = []
+    # Mock methods used by delete operations
+    store.delete_memory.return_value = None
     return store
 
 
