@@ -574,8 +574,8 @@ plan:
 
       success_criteria:
         - "ChromaStore import and usage removed"
-        - "HybridStore uses SQLiteStore for all memory/vector operations"
-        - "__init__ takes SQLiteStore + EmbeddingProvider (no ChromaStore)"
+        - "HybridStore.__init__ takes SQLiteStore + EmbeddingProvider (no ChromaStore parameter)"
+        - "HybridStore.create() factory method updated to not create ChromaStore"
         - "add_memory() delegates to SQLiteStore.add_memory()"
         - "search() delegates to SQLiteStore.search_hybrid()"
         - "get_memory() delegates to SQLiteStore.get_memory()"
