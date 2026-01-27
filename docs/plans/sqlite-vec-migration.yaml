@@ -275,15 +275,17 @@ plan:
 
       success_criteria:
         - "add_memory() inserts to memories + memories_vec + memories_fts in single transaction"
-        - "get_memory(id) retrieves memory with all metadata"
+        - "get_memory(id) retrieves memory with all metadata as dict"
         - "update_memory(id, **fields) updates any field including confidence"
-        - "delete_memory(id) removes from all three tables"
+        - "delete_memory(id) removes from all three tables atomically"
+        - "list_memories(namespace, memory_type, limit, offset) returns paginated list"
+        - "count_memories(namespace, memory_type) returns filtered count"
         - "search_vector(embedding, n_results, where) uses vec_distance_cosine"
         - "search_fts(query, n_results, where) uses FTS5 MATCH with bm25"
-        - "search_hybrid(embedding, query, n_results, vector_weight=0.7) combines both"
-        - "get_cached_embedding(content_hash, provider, model) returns cached embedding"
+        - "search_hybrid(embedding, query, n_results, vector_weight=0.7) combines vector and FTS"
+        - "get_cached_embedding(content_hash, provider, model) returns cached embedding or None"
         - "cache_embedding(content_hash, provider, model, embedding) stores in cache"
-        - "Single search() method (merged search_raw into search)"
+        - "All methods raise SQLiteStoreError on failure"
         - "No TODO comments, no placeholder code"
 
       test_commands:
