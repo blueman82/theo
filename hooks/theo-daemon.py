@@ -1705,20 +1705,19 @@ OUTPUT:"""
         )
         self.logger.info("Embed worker started")
 
-        # Create ChromaStore for document indexing
+        # Create SQLiteStore for document indexing
         try:
-            from theo.storage.chroma_store import ChromaStore
-            self.chroma_store = ChromaStore(
-                db_path=settings.get_chroma_path(),
-                collection_name=settings.collection_name,
+            from theo.storage.sqlite_store import SQLiteStore
+            self.sqlite_store = SQLiteStore(
+                db_path=settings.get_sqlite_path(),
             )
-            self.logger.info("ChromaStore created for document indexing")
+            self.logger.info("SQLiteStore created for document indexing")
         except Exception as e:
-            self.logger.error(f"Failed to create ChromaStore: {e}")
+            self.logger.error(f"Failed to create SQLiteStore: {e}")
             # Non-fatal - document indexing won't work but memory operations will
 
         # Start index worker for async document indexing
-        if self.chroma_store:
+        if self.sqlite_store:
             self._index_worker_task = asyncio.create_task(
                 index_worker(
                     self.index_queue,
