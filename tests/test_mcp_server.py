@@ -425,22 +425,16 @@ class TestMemoryTools:
         from theo.tools.memory_tools import MemoryTools
 
         # Configure store to return memory results
-        mock_doc = Document(
+        mock_result = SearchResult(
             id="mem_preference_abc12345",
             content="User prefers dark mode",
-            source_file=None,
-            chunk_index=0,
-            content_hash="xyz789",
-            namespace="global",
+            score=0.925,
             memory_type="preference",
+            namespace="global",
             confidence=0.5,
             importance=0.8,
-        )
-        mock_result = SearchResult(
-            document=mock_doc,
-            distance=0.15,
-            similarity=0.925,
-            rank=0,
+            source_file=None,
+            chunk_index=0,
         )
         mock_store.search_hybrid.return_value = [mock_result]
 
