@@ -118,7 +118,7 @@ class TestValidationLoop:
         result = await validation_loop.record_usage("doc_123", was_helpful=False)
 
         expected_new_confidence = (
-            0.5 - SUCCESS_ADJUSTMENT * DEFAULT_FAILURE_MULTIPLIER
+            0.5 - SUCCESS_ADJUSTMENT * FAILURE_MULTIPLIER
         )
         assert result.success is True
         assert result.new_confidence == expected_new_confidence
