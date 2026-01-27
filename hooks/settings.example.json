@@ -15,13 +15,65 @@
     "PrePromptSubmit": [
       {
         "type": "command",
-        "command": "python /path/to/theo/hooks/theo-daemon.py --ensure-running"
+        "command": "python /path/to/hooks/theo-daemon-ctl.py --ensure-running"
+      },
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-precontext.py"
+      }
+    ],
+    "PostPromptSubmit": [
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-prompt.py"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-context.py"
+      },
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-permissions.py"
+      }
+    ],
+    "PostToolUse": [
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-capture.py"
+      },
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-track.py"
       }
     ],
     "Stop": [
       {
         "type": "command",
-        "command": "python /path/to/theo/hooks/theo-stop.py"
+        "command": "python /path/to/hooks/theo-stop.py"
+      },
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-compact.py"
+      }
+    ],
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-session-start.py"
+      }
+    ],
+    "Notification": [
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-notify.py"
+      }
+    ],
+    "SubagentStart": [
+      {
+        "type": "command",
+        "command": "python /path/to/hooks/theo-subagent.py"
       }
     ]
   }
