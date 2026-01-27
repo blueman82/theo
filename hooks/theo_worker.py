@@ -440,20 +440,20 @@ async def index_worker(
     queue: "IndexQueue",
     batcher: "EmbeddingBatcher",
     logger: LoggerProtocol,
-    chroma_store: "ChromaStore",
+    sqlite_store: "SQLiteStore",
     poll_interval: float = 2.0,
     batch_size: int = 100,
 ) -> None:
     """Background worker that processes index queue entries.
 
     This async function runs continuously, polling the IndexQueue for
-    pending document chunks, batch embedding them, and storing to ChromaDB.
+    pending document chunks, batch embedding them, and storing to SQLite.
 
     Args:
         queue: IndexQueue instance to poll for pending entries.
         batcher: EmbeddingBatcher instance for batch embedding.
         logger: Logger instance for status logging.
-        chroma_store: ChromaStore instance for document storage.
+        sqlite_store: SQLiteStore instance for document storage.
         poll_interval: Seconds to sleep when queue is empty.
         batch_size: Maximum entries to process per batch.
     """
