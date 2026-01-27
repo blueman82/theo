@@ -9,6 +9,8 @@ These types merge DocVec's document-centric model with Recall's
 confidence and relationship tracking fields.
 """
 
+import json
+import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
@@ -27,12 +29,17 @@ class Document:
         embedding: Vector embedding (optional, may be generated separately)
         source_file: Source file path (for document indexing)
         chunk_index: Index of this chunk within the source file
-        doc_hash: Hash of content for deduplication
+        content_hash: Hash of content for deduplication
         confidence: Confidence score from 0.0 to 1.0 (for memory validation)
+        importance: Importance score from 0.0 to 1.0
         namespace: Scope/namespace for organizing documents
-        doc_type: Type categorization (e.g., 'document', 'memory', 'fact')
-        created_at: When the document was created
-        metadata: Additional metadata as dict
+        memory_type: Type categorization (e.g., 'document', 'memory', 'fact')
+        created_at: When the document was created (unix timestamp)
+        last_accessed: When the document was last accessed (unix timestamp)
+        access_count: Number of times the document has been accessed
+        start_line: Starting line number in source file
+        end_line: Ending line number in source file
+        tags: Additional metadata as dict (stored as JSON)
     """
 
     id: str
@@ -40,100 +47,77 @@ class Document:
     embedding: Optional[list[float]] = None
     source_file: Optional[str] = None
     chunk_index: int = 0
-    doc_hash: Optional[str] = None
+    content_hash: Optional[str] = None
     confidence: float = 1.0
+    importance: float = 0.5
     namespace: str = "default"
-    doc_type: str = "document"
-    created_at: datetime = field(default_factory=datetime.now)
-    metadata: Optional[dict[str, Any]] = None
+    memory_type: str = "document"
+    created_at: float = field(default_factory=lambda: datetime.now().timestamp())
+    last_accessed: Optional[float] = None
+    access_count: int = 0
+    start_line: Optional[int] = None
+    end_line: Optional[int] = None
+    tags: Optional[dict[str, Any]] = None
 
-    def to_chroma_metadata(self) -> dict[str, Any]:
-        """Convert to ChromaDB-compatible metadata dict.
-
-        ChromaDB only supports primitive types in metadata:
-        str, int, float, bool. This method flattens the document
-        fields into a compatible format.
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to dict suitable for SQLite INSERT.
 
         Returns:
-            Dictionary suitable for ChromaDB metadata field
+            Dictionary with column names matching SQLite schema.
+            The 'tags' field is serialized as JSON string.
         """
-        meta: dict[str, Any] = {
+        return {
+            "id": self.id,
+            "content": self.content,
+            "content_hash": self.content_hash,
+            "memory_type": self.memory_type,
             "namespace": self.namespace,
-            "doc_type": self.doc_type,
+            "importance": self.importance,
             "confidence": self.confidence,
+            "source_file": self.source_file,
             "chunk_index": self.chunk_index,
-            "created_at": self.created_at.isoformat(),
+            "start_line": self.start_line,
+            "end_line": self.end_line,
+            "created_at": self.created_at,
+            "last_accessed": self.last_accessed,
+            "access_count": self.access_count,
+            "tags": json.dumps(self.tags) if self.tags else None,
         }
 
-        if self.source_file is not None:
-            meta["source_file"] = self.source_file
-
-        if self.doc_hash is not None:
-            meta["doc_hash"] = self.doc_hash
-
-        # Flatten additional metadata (only primitive types)
-        if self.metadata:
-            for key, value in self.metadata.items():
-                if isinstance(value, (str, int, float, bool)):
-                    meta[f"meta_{key}"] = value
-
-        return meta
-
     @classmethod
-    def from_chroma_result(
-        cls,
-        doc_id: str,
-        content: str,
-        metadata: dict[str, Any],
-        embedding: Optional[list[float]] = None,
-    ) -> "Document":
-        """Create a Document from ChromaDB query result.
+    def from_row(cls, row: sqlite3.Row) -> "Document":
+        """Create a Document from a sqlite3.Row.
 
         Args:
-            doc_id: The document ID from ChromaDB
-            content: The document content
-            metadata: The metadata dict from ChromaDB
-            embedding: Optional embedding vector
+            row: A sqlite3.Row object from a SELECT query
 
         Returns:
             Document instance
         """
-        # Extract standard fields
-        source_file = metadata.get("source_file")
-        chunk_index = metadata.get("chunk_index", 0)
-        doc_hash = metadata.get("doc_hash")
-        confidence = metadata.get("confidence", 1.0)
-        namespace = metadata.get("namespace", "default")
-        doc_type = metadata.get("doc_type", "document")
+        # Get row as dict for easier access
+        row_dict = dict(row)
 
-        # Parse created_at
-        created_at_str = metadata.get("created_at")
-        if created_at_str:
-            try:
-                created_at = datetime.fromisoformat(created_at_str)
-            except (ValueError, TypeError):
-                created_at = datetime.now()
-        else:
-            created_at = datetime.now()
-
-        # Extract custom metadata (prefixed with meta_)
-        custom_metadata: dict[str, Any] = {}
-        for key, value in metadata.items():
-            if key.startswith("meta_"):
-                custom_metadata[key[5:]] = value  # Remove meta_ prefix
+        # Parse tags JSON if present
+        tags_raw = row_dict.get("tags")
+        tags = json.loads(tags_raw) if tags_raw else None
 
         return cls(
-            id=doc_id,
-            content=content,
-            embedding=embedding,
-            source_file=source_file,
-            chunk_index=chunk_index,
-            doc_hash=doc_hash,
-            confidence=confidence,
-            namespace=namespace,
-            doc_type=doc_type,
-            created_at=created_at,
-            metadata=custom_metadata if custom_metadata else None,
+            id=row_dict["id"],
+            content=row_dict["content"],
+            embedding=None,  # Embeddings stored separately in vec table
+            source_file=row_dict.get("source_file"),
+            chunk_index=row_dict.get("chunk_index", 0),
+            content_hash=row_dict.get("content_hash"),
+            confidence=row_dict.get("confidence", 1.0),
+            importance=row_dict.get("importance", 0.5),
+            namespace=row_dict.get("namespace", "default"),
+            memory_type=row_dict.get("memory_type", "document"),
+            created_at=row_dict.get("created_at", datetime.now().timestamp()),
+            last_accessed=row_dict.get("last_accessed"),
+            access_count=row_dict.get("access_count", 0),
+            start_line=row_dict.get("start_line"),
+            end_line=row_dict.get("end_line"),
+            tags=tags,
         )
 
 
@@ -156,35 +140,29 @@ class SearchResult:
     rank: int = 0
 
     @classmethod
-    def from_chroma_result(
+    def from_sqlite(
         cls,
-        doc_id: str,
-        content: str,
-        metadata: dict[str, Any],
+        doc: Document,
         distance: float,
         rank: int = 0,
     ) -> "SearchResult":
-        """Create SearchResult from ChromaDB query result.
+        """Create SearchResult from SQLite query result.
 
         Args:
-            doc_id: Document ID
-            content: Document content
-            metadata: ChromaDB metadata dict
-            distance: Cosine distance (0 = identical, 2 = opposite)
-            rank: Result position
+            doc: Document instance
+            distance: Vector distance (0 = identical, higher = less similar)
+            rank: Result position (0-indexed)
 
         Returns:
-            SearchResult instance
+            SearchResult instance with similarity = 1.0 - distance
         """
-        document = Document.from_chroma_result(doc_id, content, metadata)
-
-        # Convert cosine distance to similarity
-        # Cosine distance: 0 = identical, 2 = opposite
-        # Similarity: 1.0 = identical, 0.0 = opposite
-        similarity = 1.0 - (distance / 2.0)
+        # Convert distance to similarity
+        # Distance: 0 = identical, 1 = orthogonal
+        # Similarity: 1.0 = identical, 0.0 = orthogonal
+        similarity = max(0.0, 1.0 - distance)
 
         return cls(
-            document=document,
+            document=doc,
             distance=distance,
             similarity=similarity,
             rank=rank,
@@ -202,14 +180,14 @@ class StoreStats:
         unique_sources: Number of unique source files
         source_files: List of unique source file paths
         namespaces: List of unique namespaces
-        doc_types: Mapping of doc_type to count
+        memory_types: Mapping of memory_type to count
     """
 
     total_documents: int = 0
     unique_sources: int = 0
     source_files: list[str] = field(default_factory=list)
     namespaces: list[str] = field(default_factory=list)
-    doc_types: dict[str, int] = field(default_factory=dict)
+    memory_types: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
