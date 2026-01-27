@@ -1740,7 +1740,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && uv sync --dev && uv run pytest tests/ -v --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
+            command: "cd /Users/harrison/Documents/Github/theo && uv sync --dev && uv run python -m pytest tests/ -v --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
             exit_on_failure: true
       commit:
         type: "build"
