@@ -304,22 +304,17 @@ class TestQueryTools:
         # Configure store to return results
         docs = []
         for i in range(5):
-            doc = Document(
-                id=f"doc_{i}",
-                content="A" * 200,  # ~50 tokens each
-                source_file="/path/to/file.md",
-                chunk_index=i,
-                content_hash=f"hash_{i}",
-                namespace="default",
-                memory_type="document",
-                confidence=1.0,
-            )
             docs.append(
                 SearchResult(
-                    document=doc,
-                    distance=0.1 * i,
-                    similarity=0.9 - 0.1 * i,
-                    rank=i,
+                    id=f"doc_{i}",
+                    content="A" * 200,  # ~50 tokens each
+                    score=0.9 - 0.1 * i,
+                    memory_type="document",
+                    namespace="default",
+                    confidence=1.0,
+                    importance=0.5,
+                    source_file="/path/to/file.md",
+                    chunk_index=i,
                 )
             )
         mock_store.search_vector.return_value = docs
