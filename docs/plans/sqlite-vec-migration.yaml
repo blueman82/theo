@@ -963,11 +963,6 @@ plan:
         documentation_targets: []
 
       description: |
-        <mandatory_principles>
-        CODE REDUCTION: Delete 825 lines of ChromaDB code.
-        </mandatory_principles>
-
-        <task_description>
         Delete ChromaDB storage implementation:
 
         1. Verify no remaining imports: grep -r 'chroma_store' src/theo/
@@ -975,7 +970,6 @@ plan:
         3. Verify imports work: python -c 'from theo.storage import SQLiteStore'
 
         This removes ~825 lines of code.
-        </task_description>
 
       implementation:
         approach: |
