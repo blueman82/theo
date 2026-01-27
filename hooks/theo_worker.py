@@ -502,38 +502,33 @@ async def index_worker(
                 queue.update_embedding(queue_id, embedding)
                 documents_to_store.append((entry, embedding))
 
-            # Store documents to ChromaDB
+            # Store documents to SQLite
             if documents_to_store:
                 try:
-                    # Import Document type for storage
-                    from theo.storage import Document
-
-                    docs = []
-                    doc_embeddings = []
-                    for entry, embedding in documents_to_store:
-                        doc = Document(
-                            id=f"{Path(entry.source_file).stem}_{entry.chunk_index}_{entry.id}",
-                            content=entry.content,
-                            source_file=entry.source_file,
-                            chunk_index=entry.chunk_index,
-                            doc_hash=entry.doc_hash,
-                            namespace=entry.namespace,
-                            doc_type="document",
-                            confidence=1.0,
-                            metadata=entry.metadata or {},
-                        )
-                        docs.append(doc)
-                        doc_embeddings.append(embedding)
-
-                    # Store to ChromaDB (run in executor to avoid blocking event loop)
+                    stored_count = 0
                     loop = asyncio.get_running_loop()
-                    stored_ids = await loop.run_in_executor(
-                        None,  # Use default thread pool
-                        chroma_store.add_documents,
-                        docs,
-                        doc_embeddings,
-                    )
-                    logger.info(f"Stored {len(stored_ids)} documents to ChromaDB")
+
+                    for entry, embedding in documents_to_store:
+                        doc_id = f"{Path(entry.source_file).stem}_{entry.chunk_index}_{entry.id}"
+
+                        # Store to SQLite (run in executor to avoid blocking event loop)
+                        await loop.run_in_executor(
+                            None,  # Use default thread pool
+                            sqlite_store.add_memory,
+                            entry.content,
+                            embedding,
+                            "document",  # memory_type
+                            entry.namespace,
+                            1.0,  # confidence
+                            0.5,  # importance
+                            entry.source_file,
+                            entry.chunk_index,
+                            entry.doc_hash,  # content_hash
+                            entry.metadata,  # tags
+                        )
+                        stored_count += 1
+
+                    logger.info(f"Stored {stored_count} documents to SQLite")
 
                     # Mark as indexed
                     indexed_queue_ids = [entry.id for entry, _ in documents_to_store if entry.id]
