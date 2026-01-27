@@ -88,9 +88,9 @@ class HybridStore:
             mlx_model: MLX model identifier (used when embedding_backend='mlx')
             embedding_client: Optional existing EmbeddingProvider to reuse
                 (avoids creating duplicate Metal contexts on Apple Silicon)
-            chroma_path: DEPRECATED - ignored (ChromaDB removed)
-            collection_name: DEPRECATED - ignored (ChromaDB removed)
-            ephemeral: DEPRECATED - ignored (ChromaDB removed)
+            chroma_path: DEPRECATED - ignored
+            collection_name: DEPRECATED - ignored
+            ephemeral: DEPRECATED - ignored
 
         Returns:
             Configured HybridStore instance
