@@ -1006,15 +1006,19 @@ plan:
 
       success_criteria:
         - "Migration script at scripts/migrate_to_sqlite_vec.py"
-        - "Creates backup before migration"
+        - "Creates backup of theo.db and chroma_db before migration"
+        - "Verifies edges table preserved (already in SQLite, no migration needed)"
+        - "Verifies validation_events table preserved (already in SQLite)"
         - "Extracts memories from ChromaDB (if readable)"
-        - "Migrates ALL metadata fields per exact mapping"
-        - "Re-embeds if ChromaDB corrupted"
-        - "Preserves confidence values exactly (golden rules)"
-        - "Populates embedding_cache"
-        - "Builds FTS5 index"
-        - "Verifies golden rules preserved"
-        - "--dry-run flag works"
+        - "Migrates ALL 16 metadata fields per exact mapping table"
+        - "Re-embeds content using MLX if ChromaDB corrupted"
+        - "Preserves confidence values exactly (golden rules >= 0.9)"
+        - "Populates embedding_cache with all embeddings"
+        - "FTS5 index built automatically via INSERT into memories_fts"
+        - "Verifies golden rule count matches before/after migration"
+        - "Handles partial migration failure gracefully with rollback"
+        - "--dry-run flag shows what would be migrated without changes"
+        - "Progress logging shows migration status"
         - "No TODO comments"
 
       test_commands:
