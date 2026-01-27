@@ -19,8 +19,6 @@ Usage:
         --mlx-model MODEL       MLX embedding model (default: mlx-community/mxbai-embed-large-v1)
         --ollama-host HOST      Ollama server host (default: http://localhost:11434)
         --ollama-model MODEL    Ollama embedding model (default: nomic-embed-text)
-        --db-path PATH          ChromaDB storage path (default: ~/.theo/chroma_db)
-        --collection NAME       Collection name (default: documents)
         --log-level LEVEL       Logging level (default: INFO)
 
 CRITICAL: MCP servers using stdio transport must NEVER write to stdout
@@ -32,7 +30,6 @@ import logging
 import os
 import signal
 import sys
-from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -152,20 +149,6 @@ def parse_arguments() -> argparse.Namespace:
         help="Ollama request timeout (from THEO_OLLAMA_TIMEOUT)",
     )
 
-    # ChromaDB configuration (required from .env)
-    parser.add_argument(
-        "--db-path",
-        type=str,
-        default=_require_env("THEO_DB_PATH"),
-        help="ChromaDB storage path (from THEO_DB_PATH)",
-    )
-    parser.add_argument(
-        "--collection",
-        type=str,
-        default=_require_env("THEO_COLLECTION"),
-        help="ChromaDB collection (from THEO_COLLECTION)",
-    )
-
     # Logging configuration (required from .env)
     parser.add_argument(
         "--log-level",
@@ -183,11 +166,12 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
 
     Initialization order follows dependency graph:
     1. Embedding provider (MLX or Ollama)
-    2. ChromaStore
+    2. SQLiteStore (single source of truth for all storage)
     3. DaemonClient (connects to embedding provider)
     4. ChunkerRegistry
-    5. ValidationLoop
-    6. Tool instances (IndexingTools, QueryTools, MemoryTools, ManagementTools)
+    5. HybridStore (wraps SQLiteStore with embedding generation)
+    6. ValidationLoop
+    7. Tool instances (IndexingTools, QueryTools, MemoryTools, ManagementTools)
 
     Args:
         args: Parsed CLI arguments
@@ -217,18 +201,14 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
         )
         components["embedder"] = embedder
 
-        # 2. Initialize ChromaDB storage
-        db_path = Path(args.db_path).expanduser().resolve()
-        logger.info(
-            f"Initializing ChromaStore (path={db_path}, collection={args.collection})"
-        )
-        from theo.storage import ChromaStore
+        # 2. Initialize SQLiteStore (single source of truth for all storage)
+        logger.info("Initializing SQLiteStore")
+        from theo.config import TheoSettings
+        from theo.storage.sqlite_store import SQLiteStore
 
-        store = ChromaStore(
-            db_path=db_path,
-            collection_name=args.collection,
-        )
-        components["store"] = store
+        settings = TheoSettings()
+        sqlite_store = SQLiteStore(db_path=settings.get_sqlite_path())
+        components["sqlite_store"] = sqlite_store
 
         # 3. Initialize DaemonClient for non-blocking embedding operations
         # DaemonClient connects to daemon service or falls back to direct embedding
@@ -245,47 +225,38 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
         chunker_registry = ChunkerRegistry()
         components["chunker_registry"] = chunker_registry
 
-        # 5. Initialize SQLiteStore for edges and validation events
-        logger.info("Initializing SQLiteStore")
-        from theo.storage.sqlite_store import SQLiteStore
-
-        sqlite_path = db_path.parent / "theo.db"
-        sqlite_store = SQLiteStore(db_path=sqlite_path)
-        components["sqlite_store"] = sqlite_store
-
-        # 6. Initialize HybridStore (coordinates ChromaDB + SQLite)
+        # 5. Initialize HybridStore (wraps SQLiteStore with embedding generation)
         logger.info("Initializing HybridStore")
         from theo.storage.hybrid import HybridStore
 
         hybrid_store = HybridStore(
-            chroma_store=store,
             sqlite_store=sqlite_store,
             embedding_client=embedder,
         )
         components["hybrid_store"] = hybrid_store
 
-        # 7. Initialize ValidationLoop
+        # 6. Initialize ValidationLoop
         logger.info("Initializing ValidationLoop")
         from theo.validation import ValidationLoop
 
-        validation_loop = ValidationLoop(store=store)
+        validation_loop = ValidationLoop(store=sqlite_store)
         components["validation_loop"] = validation_loop
 
-        # 6. Initialize FeedbackCollector for search feedback
+        # 7. Initialize FeedbackCollector for search feedback
         logger.info("Initializing FeedbackCollector")
         from theo.validation import FeedbackCollector
 
         feedback_collector = FeedbackCollector()
         components["feedback_collector"] = feedback_collector
 
-        # 7. Initialize Tool instances
+        # 8. Initialize Tool instances
         logger.info("Initializing IndexingTools")
         from theo.tools import IndexingTools
 
         indexing_tools = IndexingTools(
             daemon_client=daemon_client,
             chunker_registry=chunker_registry,
-            store=store,
+            store=sqlite_store,
         )
         components["indexing_tools"] = indexing_tools
 
@@ -294,7 +265,7 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
 
         query_tools = QueryTools(
             daemon_client=daemon_client,
-            store=store,
+            store=sqlite_store,
             feedback_collector=feedback_collector,
         )
         components["query_tools"] = query_tools
@@ -304,7 +275,7 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
 
         memory_tools = MemoryTools(
             daemon_client=daemon_client,
-            store=store,
+            store=sqlite_store,
             validation_loop=validation_loop,
             hybrid_store=hybrid_store,
         )
@@ -313,7 +284,7 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
         logger.info("Initializing ManagementTools")
         from theo.tools import ManagementTools
 
-        management_tools = ManagementTools(store=store)
+        management_tools = ManagementTools(store=sqlite_store)
         components["management_tools"] = management_tools
 
         logger.info("All components initialized successfully")
@@ -419,10 +390,7 @@ def main() -> None:
     setup_logging(args.log_level)
 
     logger.info("Starting Theo MCP Server...")
-    logger.info(
-        f"Configuration: embedding_backend={args.embedding_backend}, "
-        f"db_path={args.db_path}, collection={args.collection}"
-    )
+    logger.info(f"Configuration: embedding_backend={args.embedding_backend}")
 
     try:
         # Initialize all components
