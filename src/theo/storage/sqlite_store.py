@@ -24,6 +24,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+import sqlite_vec
+
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
 
@@ -71,6 +73,9 @@ class SQLiteStore:
             )
             self._conn.execute("PRAGMA foreign_keys = ON")
             self._conn.row_factory = sqlite3.Row
+
+            # Load sqlite-vec extension for vector storage
+            sqlite_vec.load(self._conn)
 
             # Initialize schema
             self._init_schema()
@@ -140,10 +145,107 @@ class SQLiteStore:
             ON validation_events(event_type)
         """)
 
-        # Record initial schema version
+        # =====================================================================
+        # Memory Storage Tables (sqlite-vec migration - schema v2)
+        # =====================================================================
+
+        # Memory content and metadata (replaces ChromaDB)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS memories (
+                id TEXT PRIMARY KEY,
+                content TEXT NOT NULL,
+                content_hash TEXT,
+
+                -- Type and scope
+                memory_type TEXT NOT NULL DEFAULT 'document',
+                namespace TEXT NOT NULL DEFAULT 'default',
+
+                -- Confidence (CRITICAL: >= 0.9 means golden rule)
+                confidence REAL NOT NULL DEFAULT 0.3,
+                importance REAL NOT NULL DEFAULT 0.5,
+
+                -- Document provenance
+                source_file TEXT,
+                chunk_index INTEGER DEFAULT 0,
+                start_line INTEGER,
+                end_line INTEGER,
+
+                -- Timestamps
+                created_at REAL NOT NULL,
+                last_accessed REAL,
+                access_count INTEGER DEFAULT 0,
+
+                -- Additional metadata as JSON
+                tags TEXT
+            )
+        """)
+
+        # Vector embeddings (sqlite-vec) - MLX uses 1024 dimensions
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(
+                id TEXT PRIMARY KEY,
+                embedding FLOAT[1024]
+            )
+        """)
+
+        # Full-text search (FTS5)
+        cursor.execute("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+                content,
+                id UNINDEXED,
+                memory_type UNINDEXED,
+                namespace UNINDEXED,
+                source_file UNINDEXED
+            )
+        """)
+
+        # Embedding cache (avoid re-computation)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS embedding_cache (
+                content_hash TEXT NOT NULL,
+                provider TEXT NOT NULL,
+                model TEXT NOT NULL,
+                embedding BLOB NOT NULL,
+                dims INTEGER NOT NULL,
+                created_at REAL NOT NULL,
+                PRIMARY KEY (content_hash, provider, model)
+            )
+        """)
+
+        # Indexes for memories
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_type
+            ON memories(memory_type)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_namespace
+            ON memories(namespace)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_confidence
+            ON memories(confidence DESC)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_source_file
+            ON memories(source_file)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_memories_hash
+            ON memories(content_hash)
+        """)
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_embedding_cache_hash
+            ON embedding_cache(content_hash)
+        """)
+
+        # Record schema version 2 (sqlite-vec migration)
         cursor.execute("""
             INSERT OR IGNORE INTO schema_version (version, applied_at)
             VALUES (1, ?)
+        """, (time.time(),))
+        cursor.execute("""
+            INSERT OR IGNORE INTO schema_version (version, applied_at)
+            VALUES (2, ?)
         """, (time.time(),))
 
         self._conn.commit()
