@@ -480,13 +480,14 @@ plan:
       depends_on: []
 
       success_criteria:
-        - "Document.to_chroma_metadata() removed"
-        - "Document.from_chroma_result() removed"
-        - "SearchResult.from_chroma_result() removed"
-        - "Document.to_dict() added for SQLite serialization"
-        - "Document.from_row(row) added for SQLite deserialization"
-        - "SearchResult.from_sqlite(doc, distance) added"
-        - "All dataclass fields preserved (id, content, confidence, etc.)"
+        - "Document.to_chroma_metadata() method removed"
+        - "Document.from_chroma_result() classmethod removed"
+        - "SearchResult.from_chroma_result() classmethod removed"
+        - "Document.to_dict() method added returning dict matching memories table columns"
+        - "Document.from_row(row: sqlite3.Row) classmethod added"
+        - "SearchResult.from_sqlite(doc, distance, rank) classmethod added with similarity = 1.0 - distance"
+        - "Document dataclass field doc_type renamed to memory_type to match SQLite schema"
+        - "Document dataclass field doc_hash renamed to content_hash to match SQLite schema"
         - "No TODO comments"
 
       test_commands:
