@@ -446,8 +446,6 @@ async def run_opus_analysis(issues_file: str) -> None:
         settings = RecallSettings()
         store = await HybridStore.create(
             sqlite_path=settings.get_sqlite_path(),
-            chroma_path=settings.get_chroma_path(),
-            collection_name=settings.collection_name,
             ollama_host=settings.ollama_host,
             ollama_model=settings.ollama_model,
         )
