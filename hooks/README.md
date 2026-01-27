@@ -55,7 +55,7 @@ Claude Code hooks for Theo integration - memory storage, context injection, and 
 
 3. Start the daemon:
    ```bash
-   python ~/.claude/hooks/theo-daemon-ctl.py start
+   ~/.claude/hooks/theo-daemon-ctl.py start
    ```
 
 ## Configuration
