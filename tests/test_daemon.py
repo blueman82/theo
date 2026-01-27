@@ -689,6 +689,8 @@ class TestModuleLevelFunctions:
         assert result is False
 
 
+@pytest.mark.timeout(60)
+@pytest.mark.xdist_group("daemon")
 class TestIntegration:
     """Integration tests for daemon components."""
 
