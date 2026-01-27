@@ -18,9 +18,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from theo.storage.types import Document, StoreStats, HybridSearchResult
 from theo.storage.sqlite_store import SearchResult
-from theo.types import MemoryType
 
 
 # =============================================================================
