@@ -110,6 +110,24 @@ plan:
         type: "build"
         message: "Add sqlite-vec dependency for vector storage migration"
         files: ["pyproject.toml"]
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: 5c96fb9
+            message: 'build: Add sqlite-vec dependency for vector storage migration'
+        - attempt_number: "1"
+          agent: python-pro
+          verdict: GREEN
+          agent_output: '{"errors":[],"files_modified":["pyproject.toml"],"output":"Task completed successfully:\n1. Added sqlite-vec\u003e=0.1.6 to dependencies in pyproject.toml (line 16)\n2. Kept chromadb\u003e=0.4.0 as required for migration script in Task 12\n3. Ran uv sync --dev - sqlite-vec==0.1.6 installed successfully\n4. Committed changes with message: \"build: Add sqlite-vec dependency for vector storage migration\"","status":"success","summary":"Added sqlite-vec\u003e=0.1.6 dependency to pyproject.toml and synced with uv"}'
+          qc_feedback: |-
+            [code-reviewer] Task completed successfully. The agent correctly added sqlite-vec>=0.1.6 to the dependencies in pyproject.toml (line 16), kept chromadb>=0.4.0 for the migration script as required, successfully ran uv sync --dev, and committed the changes with the correct commit message.
+            [dependency-manager] Task completed successfully. The agent correctly added sqlite-vec>=0.1.6 to pyproject.toml dependencies (line 16) while keeping chromadb>=0.4.0 (line 15) for the migration script. All test commands passed: uv sync resolved packages successfully and the import test confirmed sqlite-vec is properly installed. The commit was created with the exact required message.
+            [python-pro] All success criteria verified. sqlite-vec>=0.1.6 added at line 16, chromadb>=0.4.0 retained at line 15, uv sync passed, import succeeds, no TODO comments in pyproject.toml, and commit 5c96fb9 created with correct message.
+            [quality-control] All success criteria met. sqlite-vec>=0.1.6 was added to pyproject.toml dependencies (line 16), chromadb>=0.4.0 is retained (line 15), uv sync completed successfully, sqlite_vec module imports correctly, and no TODO comments exist in production code. The commit was properly created with the exact required message.
+          timestamp: "2026-01-27T07:07:13Z"
+      completed_date: "2026-01-27"
     - task_number: "2"
       name: "Extend sqlite_store.py with sqlite-vec tables"
       agent: "database-optimizer"
@@ -239,6 +257,44 @@ plan:
         type: "feat"
         message: "Add sqlite-vec tables: memories, memories_vec, memories_fts, embedding_cache"
         files: ["src/theo/storage/sqlite_store.py"]
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: 52898d1
+            message: 'feat: Add sqlite-vec tables: memories, memories_vec, memories_fts, embedding_cache'
+        - attempt_number: "2"
+          commit_verification:
+            found: true
+            hash: d060201
+            message: 'feat: Add sqlite-vec tables: memories, memories_vec, memories_fts, embedding_cache'
+        - attempt_number: "2"
+          agent: database-optimizer
+          verdict: RED
+          agent_output: '{"errors":[],"files_modified":["src/theo/storage/sqlite_store.py"],"metadata":{"branch":"feature/migration","commit_hash":"d060201","indexes_created":["idx_memories_type","idx_memories_namespace","idx_memories_confidence","idx_memories_source_file","idx_memories_hash","idx_embedding_cache_hash"],"schema_version":2,"tables_created":["memories","memories_vec","memories_fts","embedding_cache"]},"output":"## Changes Made\n\nFixed the SQLite extension loading authorization error in `src/theo/storage/sqlite_store.py`:\n\n### The Problem\nThe previous attempt failed because `sqlite_vec.load(self._conn)` requires extension loading to be explicitly enabled on the SQLite connection first. By default, SQLite disables extension loading for security reasons.\n\n### The Fix\nAdded `self._conn.enable_load_extension(True)` before loading the sqlite-vec extension, then disabled it again after loading for security:\n\n```python\n# Enable extension loading and load sqlite-vec for vector storage\nself._conn.enable_load_extension(True)\nsqlite_vec.load(self._conn)\nself._conn.enable_load_extension(False)  # Disable for security\n```\n\n### Verification\nSuccessfully verified:\n1. SQLiteStore initializes without errors\n2. All required tables are created:\n   - `memories` (15 columns for memory metadata)\n   - `memories_vec` (vec0 virtual table for 1024-dim embeddings)\n   - `memories_fts` (FTS5 virtual table for full-text search)\n   - `embedding_cache` (for caching embeddings)\n3. All 6 required indexes are created\n4. Schema version is correctly set to 2\n\n### Architectural Decision\nDisabling extension loading after loading sqlite-vec is a security best practice - it prevents any subsequent code from loading arbitrary extensions into the database connection.","status":"success","summary":"Fixed sqlite-vec extension loading by adding enable_load_extension(True) before sqlite_vec.load() call, then disabling for security. All sqlite-vec tables (memories, memories_vec, memories_fts, embedding_cache) are now created successfully."}'
+          qc_feedback: |-
+            [code-reviewer] All success criteria verified. The implementation correctly extends sqlite_store.py with sqlite-vec tables including proper extension loading (enable_load_extension(True) before sqlite_vec.load()), memories table with all 15 required columns, memories_vec virtual table with FLOAT[1024], memories_fts FTS5 virtual table with correct UNINDEXED columns, embedding_cache table with composite primary key, all 6 required indexes, and schema version 2. The fix for the previous authorization error (adding enable_load_extension) was correctly applied with the security best practice of disabling extension loading after use. No TODO comments or placeholder code found. Test command passes successfully.
+            [postgres-pro] All implementation requirements verified successfully. The sqlite_store.py correctly loads sqlite-vec extension with proper enable_load_extension(True)/False security pattern, creates all 4 required tables (memories with 15 columns, memories_vec virtual table with FLOAT[1024], memories_fts FTS5 virtual table, embedding_cache with 6 columns), creates all 6 required indexes, and sets schema version to 2. Test command passes, no TODO/placeholder code present. Commit verified at d060201.
+            [sql-pro] All sqlite-vec table requirements successfully implemented. The implementation correctly loads the sqlite-vec extension with proper security measures (enable_load_extension toggled appropriately), creates all required tables (memories with 15 columns, memories_vec with FLOAT[1024], memories_fts with FTS5, embedding_cache with composite PK), and all 6 required indexes. Schema version is correctly set to 2. Test passes successfully. Code follows Python best practices with type hints, specific exception handling (SQLiteStoreError), and context manager patterns for resource management.
+            [architect-reviewer] All success criteria verified. The sqlite-vec extension is properly loaded with enable_load_extension(True) before sqlite_vec.load(conn), then disabled for security. The memories table has all 15 required columns (id, content, content_hash, memory_type, namespace, confidence, importance, source_file, chunk_index, start_line, end_line, created_at, last_accessed, access_count, tags). The memories_vec virtual table uses FLOAT[1024] for MLX embeddings. The memories_fts FTS5 table correctly indexes content with id/memory_type/namespace/source_file as UNINDEXED. The embedding_cache table has composite primary key on (content_hash, provider, model). All 6 required indexes are created. Schema version is correctly set to 2. No TODO or placeholder comments found. Test command passes successfully.
+          timestamp: "2026-01-27T07:15:55Z"
+        - attempt_number: "3"
+          commit_verification:
+            found: true
+            hash: d060201
+            message: 'feat: Add sqlite-vec tables: memories, memories_vec, memories_fts, embedding_cache'
+        - attempt_number: "3"
+          agent: python-pro
+          verdict: GREEN
+          agent_output: '{"errors":[],"files_modified":[],"metadata":{"commit_sha":"d060201","indexes_created":6,"schema_version":2,"tables_created":["memories","memories_vec","memories_fts","embedding_cache"]},"output":"The task is already complete. Verification shows:\n\n1. sqlite-vec extension loading (lines 77-80):\n   - enable_load_extension(True) before loading\n   - sqlite_vec.load(self._conn) \n   - enable_load_extension(False) for security\n\n2. memories table (lines 155-183): All 15 columns present\n   - id, content, content_hash, memory_type, namespace\n   - confidence (default 0.3), importance (default 0.5)\n   - source_file, chunk_index, start_line, end_line\n   - created_at, last_accessed, access_count, tags\n\n3. memories_vec virtual table (lines 186-191):\n   - FLOAT[1024] for MLX embeddings\n\n4. memories_fts FTS5 table (lines 194-202):\n   - content indexed, id/memory_type/namespace/source_file UNINDEXED\n\n5. embedding_cache table (lines 205-215):\n   - Composite PK on (content_hash, provider, model)\n\n6. All 6 indexes created (lines 218-241)\n\n7. Schema version 2 recorded (lines 243-251)\n\nTest verification: `uv run python -c \"from theo.storage.sqlite_store import SQLiteStore; s = SQLiteStore(); print(''Tables created'')\"` → Success\n\nCommit: d060201 \"feat: Add sqlite-vec tables: memories, memories_vec, memories_fts, embedding_cache\"","status":"success","summary":"sqlite_store.py already has all sqlite-vec tables (memories, memories_vec, memories_fts, embedding_cache) with proper extension loading and schema version 2. Commit d060201 exists."}'
+          qc_feedback: |-
+            [code-reviewer] All success criteria verified. The implementation correctly extends sqlite_store.py with sqlite-vec tables. The sqlite-vec extension is properly loaded with enable_load_extension(True) before sqlite_vec.load(conn), then disabled for security (lines 77-80). All required tables are created: memories table with 15 columns (lines 155-183), memories_vec virtual table with FLOAT[1024] (lines 186-191), memories_fts FTS5 virtual table with correct UNINDEXED columns (lines 194-202), and embedding_cache table with composite primary key (lines 205-215). All 6 required indexes are created (lines 218-241), and schema version 2 is recorded (lines 248-251). Test command passes successfully. Commit d060201 exists with the correct message.
+            [sql-pro] Implementation fully verified. All sqlite-vec tables and schema elements are correctly implemented in sqlite_store.py. The sqlite-vec extension is properly loaded with the security pattern (enable_load_extension(True) before load, False after). All 4 tables (memories, memories_vec, memories_fts, embedding_cache) are created with correct schemas. All 6 required indexes exist. Schema version 2 is recorded. Test command passes successfully. Commit d060201 verified.
+            [postgres-pro] All success criteria verified. The sqlite_store.py implementation correctly extends the database schema with sqlite-vec tables. The sqlite-vec extension is properly loaded with enable_load_extension(True) before sqlite_vec.load(), then disabled for security (lines 77-80). The memories table contains all 15 required columns (lines 155-183). The memories_vec virtual table uses FLOAT[1024] for MLX embeddings (lines 186-191). The memories_fts FTS5 table correctly indexes content with id/memory_type/namespace/source_file as UNINDEXED (lines 194-202). The embedding_cache table has composite primary key on (content_hash, provider, model) with all 6 required columns (lines 205-215). All 6 required indexes are created (lines 218-241). Schema version 2 is correctly recorded (lines 248-251). Test command passes successfully. Commit d060201 exists with the correct message.
+            [architect-reviewer] All success criteria verified. The sqlite_store.py implementation correctly extends with sqlite-vec tables: (1) sqlite_vec.load() called with proper enable_load_extension(True) before and disabled after for security (lines 77-80), (2) memories table with all 15 required columns including id, content, content_hash, memory_type, namespace, confidence, importance, source_file, chunk_index, start_line, end_line, created_at, last_accessed, access_count, tags (lines 155-183), (3) memories_vec virtual table with FLOAT[1024] for MLX embeddings (lines 186-191), (4) memories_fts FTS5 virtual table with content indexed and id/memory_type/namespace/source_file UNINDEXED (lines 194-202), (5) embedding_cache table with composite primary key on (content_hash, provider, model) (lines 205-215), (6) all 6 required indexes created (lines 217-241), and (7) schema version 2 recorded (lines 248-251). Test command passes successfully. Commit d060201 verified.
+          timestamp: "2026-01-27T07:17:31Z"
+      completed_date: "2026-01-27"
     - task_number: "3"
       name: "Add vector and FTS search methods to sqlite_store.py"
       agent: "database-optimizer"
@@ -414,6 +470,24 @@ plan:
         type: "feat"
         message: "Add vector search, FTS search, hybrid search, CRUD, and embedding cache"
         files: ["src/theo/storage/sqlite_store.py"]
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: 6dc8f09
+            message: 'feat: Add vector search, FTS search, hybrid search, CRUD, and embedding cache'
+        - attempt_number: "1"
+          agent: database-optimizer
+          verdict: GREEN
+          agent_output: '{"errors":[],"files_modified":["src/theo/storage/sqlite_store.py"],"metadata":{"commit_hash":"6dc8f09","lines_added":740,"lines_removed":7},"output":"Implemented all required methods in src/theo/storage/sqlite_store.py:\n\n## Memory CRUD Operations:\n- add_memory(): Inserts into memories, memories_vec, memories_fts atomically with UPSERT\n- get_memory(): Returns memory dict or None by ID\n- update_memory(): Updates any allowed field with dynamic SQL\n- delete_memory(): Removes from all 3 tables + edges atomically\n- list_memories(): Pagination with namespace/memory_type filters\n- count_memories(): Count with optional filters\n\n## Search Operations:\n- search_vector(): KNN search using sqlite-vec MATCH with cosine distance\n- search_fts(): FTS5 search with BM25 ranking and query escaping\n- search_hybrid(): Reciprocal Rank Fusion combining vector and FTS results\n\n## Embedding Cache:\n- get_cached_embedding(): Retrieve by content_hash + provider + model\n- cache_embedding(): Store with UPSERT semantics\n\n## Key Design Decisions:\n1. ID generation: uuid4().hex (simplified from _generate_id())\n2. SearchResult dataclass for type-safe search results\n3. Cosine distance to similarity: similarity = 1.0 - (distance / 2.0)\n4. RRF (Reciprocal Rank Fusion) for hybrid search combining\n5. FTS query escaping for special characters\n6. Struct pack/unpack for embedding serialization\n7. Transaction rollback on any failure","status":"success","summary":"Added vector search, FTS search, hybrid search, CRUD, and embedding cache methods to sqlite_store.py"}'
+          qc_feedback: |-
+            [code-reviewer] All 13 success criteria are met. The implementation in sqlite_store.py is complete and follows best practices including: type hints throughout, specific exception handling (SQLiteStoreError), no mutable default arguments, context managers via database transactions with rollback on failure. The SearchResult dataclass provides type-safe search results. Architectural decisions are well-justified: (1) RRF for hybrid search combining avoids complex score normalization issues, (2) uuid4().hex simplifies ID generation, (3) atomic transactions maintain consistency across 3 virtual tables. The prior art (commits for sqlite-vec tables) was foundational schema work that this implementation builds upon - the task explicitly adds CRUD and search methods to operate on those tables.
+            [sql-pro] All 13 success criteria are satisfied. The implementation correctly adds comprehensive CRUD operations (add_memory, get_memory, update_memory, delete_memory), list/count operations, all three search methods (search_vector, search_fts, search_hybrid), and embedding cache operations. The code follows Pythonic patterns with type hints, context managers for transactions, and proper error handling via SQLiteStoreError. The agent's stop_justification is implicitly valid: the prior art commits only created the schema tables - this task implements the actual operational methods that use those tables.
+            [postgres-pro] All 13 success criteria have been fully implemented in src/theo/storage/sqlite_store.py. The implementation follows Pythonic patterns with full type hints, EAFP exception handling, and context managers for transactions. All methods raise SQLiteStoreError on failure as required. The commit was successfully made with hash 6dc8f09.
+            [python-pro] All 13 success criteria have been successfully implemented in src/theo/storage/sqlite_store.py. The implementation follows the specified method signatures, uses proper type hints, handles errors with SQLiteStoreError, and contains no TODO or placeholder code. The commit was verified successfully (6dc8f09).
+          timestamp: "2026-01-27T07:25:09Z"
+      completed_date: "2026-01-27"
     # =========================================================================
     # TYPES-CONFIG GROUP (parallel)
     # =========================================================================
@@ -680,6 +754,7 @@ plan:
         type: "refactor"
         message: "Update HybridStore to use SQLiteStore instead of ChromaStore"
         files: ["src/theo/storage/hybrid.py"]
+      status: "failed"
     - task_number: "8"
       name: "Update storage/__init__.py exports"
       agent: "python-pro"
@@ -750,6 +825,7 @@ plan:
         type: "refactor"
         message: "Update storage exports - remove ChromaStore"
         files: ["src/theo/storage/__init__.py"]
+      status: "failed"
     # =========================================================================
     # ENTRY POINT GROUP
     # =========================================================================
