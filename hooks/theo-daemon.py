@@ -1723,7 +1723,7 @@ OUTPUT:"""
                     self.index_queue,
                     self.index_batcher,
                     self.logger,  # type: ignore[arg-type]
-                    self.chroma_store,
+                    self.sqlite_store,
                 )
             )
 
