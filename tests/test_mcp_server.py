@@ -176,7 +176,7 @@ class TestIndexingTools:
                 "dimensions": 1280,
             },
         }
-        mock_store.add_documents.return_value = ["id_1", "id_2"]
+        mock_store.add_memory.return_value = ["id_1", "id_2"]
 
         tools = IndexingTools(
             daemon_client=mock_daemon_client,
@@ -196,7 +196,7 @@ class TestIndexingTools:
         assert result["data"]["chunks_created"] == 2
         assert str(test_file) in result["data"]["source_file"]
         mock_daemon_client.embed.assert_called_once()
-        mock_store.add_documents.assert_called_once()
+        mock_store.add_memory.assert_called_once()
 
     def test_index_directory_empty(
         self, mock_daemon_client, mock_chunker_registry, mock_store, tmp_path
@@ -390,7 +390,7 @@ class TestMemoryTools:
         """Test successful memory storage."""
         from theo.tools.memory_tools import MemoryTools
 
-        mock_store.add_documents.return_value = ["mem_session_abc12345"]
+        mock_store.add_memory.return_value = ["mem_session_abc12345"]
 
         tools = MemoryTools(
             daemon_client=mock_daemon_client,
