@@ -1327,10 +1327,11 @@ plan:
       agent: "test-automator"
       files:
         - "tests/test_sqlite_store.py"
+        - "tests/test_chroma_store.py"
       depends_on: [11]
       success_criteria:
         - "tests/test_sqlite_store.py exists with comprehensive tests"
-        - "tests/test_chroma_store.py deleted or renamed"
+        - "tests/test_chroma_store.py deleted"
         - "Tests cover CRUD: add_memory, get_memory, update_memory, delete_memory"
         - "Tests cover list_memories and count_memories with filters"
         - "Tests cover search_vector, search_fts, search_hybrid"
