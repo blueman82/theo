@@ -52,7 +52,7 @@ def mock_daemon_client():
 
 @pytest.fixture
 def mock_store():
-    """Create a mock ChromaStore for testing."""
+    """Create a mock SQLiteStore for testing."""
     store = MagicMock()
     # Default stats
     store.get_stats.return_value = StoreStats(
@@ -60,7 +60,7 @@ def mock_store():
         unique_sources=5,
         source_files=["/path/to/file1.md", "/path/to/file2.py"],
         namespaces=["default", "project1"],
-        doc_types={"document": 8, "memory": 2},
+        memory_types={"document": 8, "memory": 2},
     )
     store.count.return_value = 10
     store.get.return_value = {"ids": [], "documents": [], "metadatas": []}
