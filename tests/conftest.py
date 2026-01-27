@@ -68,29 +68,6 @@ def mock_embedder() -> MagicMock:
 
 
 @pytest.fixture
-def temp_chroma(temp_dir: Path) -> Generator[Any, None, None]:
-    """Create a temporary ChromaDB instance for isolated testing.
-
-    This fixture creates a ChromaDB client with ephemeral storage,
-    ensuring tests don't affect production data.
-
-    Args:
-        temp_dir: Temporary directory fixture for ChromaDB storage
-
-    Yields:
-        chromadb.Client: A ChromaDB client configured for testing
-    """
-    try:
-        import chromadb
-
-        # Use ephemeral client for testing (in-memory)
-        client = chromadb.Client()
-        yield client
-    except ImportError:
-        pytest.skip("chromadb not installed")
-
-
-@pytest.fixture
 def sample_documents(temp_dir: Path) -> dict[str, Path]:
     """Create sample test documents in various formats.
 
