@@ -267,21 +267,16 @@ class TestQueryTools:
         from theo.tools.query_tools import QueryTools
 
         # Configure store to return results
-        mock_doc = Document(
+        mock_result = SearchResult(
             id="doc_1",
             content="Test document content",
+            score=0.9,
+            memory_type="document",
+            namespace="default",
+            confidence=1.0,
+            importance=0.5,
             source_file="/path/to/file.md",
             chunk_index=0,
-            content_hash="abc123",
-            namespace="default",
-            memory_type="document",
-            confidence=1.0,
-        )
-        mock_result = SearchResult(
-            document=mock_doc,
-            distance=0.2,
-            similarity=0.9,
-            rank=0,
         )
         mock_store.search_vector.return_value = [mock_result]
 
