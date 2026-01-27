@@ -1442,10 +1442,10 @@ plan:
         - "Tests cover edge operations (add_edge, get_edges, delete_edge)"
         - "Tests use in-memory SQLite (':memory:') with sqlite-vec extension"
         - "Mock embeddings use [0.1] * 1024 for 1024-dim vectors"
-        - "All tests pass with uv run pytest tests/test_sqlite_store.py -v"
+        - "All tests pass with uv run python -m pytest tests/test_sqlite_store.py -v"
         - "No TODO comments"
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_sqlite_store.py -v"
+        - "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/test_sqlite_store.py -v"
       runtime_metadata:
         dependency_checks:
           - command: "ls /Users/harrison/Documents/Github/theo/tests/test_*store*.py || echo 'None'"
@@ -1513,7 +1513,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_sqlite_store.py -v"
+            command: "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/test_sqlite_store.py -v"
             exit_on_failure: true
       commit:
         type: "test"
@@ -1534,7 +1534,7 @@ plan:
             [code-reviewer] Task completed successfully. The agent created a comprehensive test suite for SQLiteStore in tests/test_sqlite_store.py (927 lines, 40 tests) and deleted tests/test_chroma_store.py. All tests pass (40/40) and cover all required functionality including CRUD operations, list/count with filters, vector/FTS/hybrid search, embedding cache, golden rule threshold, edge operations, and validation events. The test file uses proper pytest patterns with in-memory SQLite fixture using ':memory:' and mock embeddings of [0.1] * 1024.
             [python-backend-tdd-agent] All success criteria have been satisfied. The agent correctly implemented comprehensive tests for SQLiteStore with sqlite-vec. The test file tests/test_sqlite_store.py exists with 40 passing tests covering all required functionality. The test_chroma_store.py file has been deleted (no longer exists). Tests use in-memory SQLite with ':memory:' and mock embeddings of [0.1] * 1024 for 1024-dimensional vectors. All tests pass and there are no TODO comments.
             [database-optimizer] All success criteria have been met. The tests/test_sqlite_store.py file exists with 40 comprehensive tests that all pass. The tests/test_chroma_store.py file has been deleted (no longer exists). The test file covers all required functionality: CRUD operations (add_memory, get_memory, update_memory, delete_memory), list_memories and count_memories with namespace/type filters, vector search (search_vector with KNN), FTS search (search_fts with BM25 ranking), hybrid search (search_hybrid with RRF), embedding cache operations (get_cached_embedding, cache_embedding), golden rule threshold detection (confidence >= 0.9), and edge operations (add_edge, get_edges, delete_edge). Tests use in-memory SQLite with ':memory:' and mock embeddings of [0.1] * 1024 for 1024-dimensional vectors. No TODO comments found in the test file.
-            [qa-expert] All success criteria have been met. tests/test_sqlite_store.py exists with 40 comprehensive tests covering all required functionality. tests/test_chroma_store.py has been deleted (no longer exists). All tests pass with uv run pytest tests/test_sqlite_store.py -v (40 passed in 0.44s). No TODO comments found. The test file uses in-memory SQLite with ':memory:' and mock embeddings of [0.1] * 1024 for 1024-dim vectors.
+            [qa-expert] All success criteria have been met. tests/test_sqlite_store.py exists with 40 comprehensive tests covering all required functionality. tests/test_chroma_store.py has been deleted (no longer exists). All tests pass with uv run python -m pytest tests/test_sqlite_store.py -v (40 passed in 0.44s). No TODO comments found. The test file uses in-memory SQLite with ':memory:' and mock embeddings of [0.1] * 1024 for 1024-dim vectors.
           timestamp: "2026-01-27T08:59:16Z"
       completed_date: "2026-01-27"
     - task_number: "15"
@@ -1549,10 +1549,10 @@ plan:
         - "tests/integration/test_mcp_tools.py imports SQLiteStore instead of ChromaStore"
         - "All ChromaStore references replaced with SQLiteStore"
         - "Tests use SQLiteStore API (add_memory, search_hybrid, etc.)"
-        - "uv run pytest tests/integration/ -v passes"
+        - "uv run python -m pytest tests/integration/ -v passes"
         - "No TODO comments"
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/integration/ -v"
+        - "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/integration/ -v"
       runtime_metadata:
         dependency_checks:
           - command: "grep -r 'ChromaStore' /Users/harrison/Documents/Github/theo/tests/integration/ || echo 'None'"
@@ -1566,7 +1566,7 @@ plan:
         1. Change: from theo.storage import ChromaStore → from theo.storage import SQLiteStore
         2. Replace ChromaStore() instantiation with SQLiteStore(":memory:")
         3. Update any ChromaStore-specific API calls to SQLiteStore equivalents
-        4. Ensure tests pass with uv run pytest tests/integration/ -v
+        4. Ensure tests pass with uv run python -m pytest tests/integration/ -v
         </task_description>
       implementation:
         approach: |
@@ -1581,7 +1581,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/integration/ -v"
+            command: "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/integration/ -v"
             exit_on_failure: true
       commit:
         type: "test"
@@ -1597,7 +1597,7 @@ plan:
         - attempt_number: "1"
           agent: test-automator
           verdict: GREEN
-          agent_output: '{"errors":[],"files_modified":[],"metadata":{"already_completed":true,"previous_commits":["cd0e9c5","d657a94"],"tests_failed":0,"tests_passed":44},"output":"The integration tests at tests/integration/test_full_pipeline.py and tests/integration/test_mcp_tools.py were already updated to use SQLiteStore instead of ChromaStore in previous commits (cd0e9c5 and d657a94).\n\nVerification performed:\n1. Both files import SQLiteStore: `from theo.storage import SQLiteStore`\n2. Both files use SQLiteStore fixtures: `store = SQLiteStore(db_path=temp_db_path)`\n3. No ChromaStore references exist in tests/integration/\n4. All 44 integration tests pass: `uv run pytest tests/integration/ -v` (2.13s execution)\n\nTest breakdown:\n- tests/integration/test_full_pipeline.py: 17 tests passed\n- tests/integration/test_mcp_tools.py: 27 tests passed\n\nNo new commits required as the task was already completed.","status":"success","summary":"Integration tests already use SQLiteStore - no changes needed"}'
+          agent_output: '{"errors":[],"files_modified":[],"metadata":{"already_completed":true,"previous_commits":["cd0e9c5","d657a94"],"tests_failed":0,"tests_passed":44},"output":"The integration tests at tests/integration/test_full_pipeline.py and tests/integration/test_mcp_tools.py were already updated to use SQLiteStore instead of ChromaStore in previous commits (cd0e9c5 and d657a94).\n\nVerification performed:\n1. Both files import SQLiteStore: `from theo.storage import SQLiteStore`\n2. Both files use SQLiteStore fixtures: `store = SQLiteStore(db_path=temp_db_path)`\n3. No ChromaStore references exist in tests/integration/\n4. All 44 integration tests pass: `uv run python -m pytest tests/integration/ -v` (2.13s execution)\n\nTest breakdown:\n- tests/integration/test_full_pipeline.py: 17 tests passed\n- tests/integration/test_mcp_tools.py: 27 tests passed\n\nNo new commits required as the task was already completed.","status":"success","summary":"Integration tests already use SQLiteStore - no changes needed"}'
           qc_feedback: |-
             [code-reviewer] All success criteria have been met. Both integration test files have been successfully updated to use SQLiteStore instead of ChromaStore:
 
@@ -1620,10 +1620,10 @@ plan:
         - "All mocks use SQLiteStore instead of ChromaStore"
         - "Test fixtures create SQLiteStore(':memory:') not ChromaStore"
         - "Tests call SQLiteStore methods (add_memory, get_memory, update_memory)"
-        - "uv run pytest tests/test_validation.py -v passes all tests"
+        - "uv run python -m pytest tests/test_validation.py -v passes all tests"
         - "No TODO comments"
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_validation.py -v"
+        - "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/test_validation.py -v"
       runtime_metadata:
         dependency_checks:
           - command: "grep -n 'ChromaStore' /Users/harrison/Documents/Github/theo/tests/test_validation.py || echo 'None'"
@@ -1654,7 +1654,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_validation.py -v"
+            command: "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/test_validation.py -v"
             exit_on_failure: true
       commit:
         type: "test"
@@ -1691,7 +1691,7 @@ plan:
         - "grep -r 'ChromaStore' src/theo/ returns no matches"
         - "uv sync --dev succeeds without chromadb"
         - "uv run python -c 'from theo.storage import SQLiteStore' succeeds"
-        - "uv run pytest tests/ -v passes all tests"
+        - "uv run python -m pytest tests/ -v passes all tests"
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage import SQLiteStore; print(\"OK\")'"
@@ -1724,7 +1724,7 @@ plan:
            Remove "chromadb.*" from module list
 
         3. Run: uv sync --dev
-        4. Run: uv run pytest tests/ -v
+        4. Run: uv run python -m pytest tests/ -v
         5. Verify all success criteria above
         </task_description>
       implementation:
