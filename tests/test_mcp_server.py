@@ -451,7 +451,7 @@ class TestMemoryTools:
             similarity=0.925,
             rank=0,
         )
-        mock_store.search_vector.return_value = [mock_result]
+        mock_store.search_hybrid.return_value = [mock_result]
 
         tools = MemoryTools(
             daemon_client=mock_daemon_client,
