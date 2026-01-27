@@ -888,9 +888,15 @@ plan:
           - point: "Update ValidationLoop"
             details: "Use SQLiteStore.update_memory() for confidence"
             reference: "src/theo/validation/loop.py"
-          - point: "Update golden_rules"
-            details: "Use SQLiteStore.get_memory() for confidence check"
+          - point: "Update golden_rules.py"
+            details: "is_golden_rule() uses get_memory(), checks confidence >= 0.9 or memory_type == 'golden_rule'"
             reference: "src/theo/validation/golden_rules.py"
+          - point: "Update feedback.py"
+            details: "Replace ChromaStore with SQLiteStore for memory operations"
+            reference: "src/theo/validation/feedback.py"
+          - point: "Update type hints"
+            details: "Change store parameter types from ChromaStore to SQLiteStore"
+            reference: "src/theo/validation/"
 
       code_quality:
         python:
