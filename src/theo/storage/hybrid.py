@@ -247,14 +247,16 @@ class HybridStore:
         n_results: int = 5,
         namespace: Optional[str] = None,
         memory_type: Optional[str] = None,
+        vector_weight: float = 0.7,
     ) -> list[dict[str, Any]]:
-        """Perform semantic search using SQLite vector search.
+        """Perform hybrid search combining vector and FTS using SQLite.
 
         Args:
             query: Search query text
             n_results: Number of results to return (default: 5)
             namespace: Filter by namespace (optional)
             memory_type: Filter by type (optional)
+            vector_weight: Weight for vector scores vs FTS (default: 0.7)
 
         Returns:
             List of memory dicts with similarity scores
@@ -263,25 +265,25 @@ class HybridStore:
             # Generate query embedding
             query_embedding = self._embedding_client.embed_query(query)
 
-            # Build filter
-            where: Optional[dict] = None
-            if namespace or memory_type:
-                where = {}
-                if namespace:
-                    where["namespace"] = namespace
-                if memory_type:
-                    where["memory_type"] = memory_type
-
-            # Search using sqlite-vec
-            results = self._sqlite.search_vector(
+            # Search using hybrid (vector + FTS) via SQLiteStore
+            # Note: search_hybrid doesn't support namespace/memory_type filters directly,
+            # so filtering is done post-search if needed
+            results = self._sqlite.search_hybrid(
                 embedding=query_embedding,
-                n_results=n_results,
-                where=where,
+                query=query,
+                n_results=n_results * 2 if namespace or memory_type else n_results,
+                vector_weight=vector_weight,
             )
 
-            # Convert SearchResult dataclass to dict format
+            # Convert SearchResult dataclass to dict format and apply filters
             memories = []
             for r in results:
+                # Apply namespace and memory_type filters
+                if namespace and r.namespace != namespace:
+                    continue
+                if memory_type and r.memory_type != memory_type:
+                    continue
+
                 memories.append({
                     "id": r.id,
                     "content": r.content,
@@ -292,6 +294,10 @@ class HybridStore:
                     "similarity": r.score,
                     "metadata": r.metadata,
                 })
+
+                # Stop once we have enough results after filtering
+                if len(memories) >= n_results:
+                    break
 
             return memories
 
