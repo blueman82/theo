@@ -376,6 +376,22 @@ plan:
             self, content_hash: str, provider: str, model: str, embedding: list[float]
         ) -> None:
             """Store embedding in cache."""
+
+        def list_memories(
+            self,
+            namespace: str | None = None,
+            memory_type: str | None = None,
+            limit: int = 100,
+            offset: int = 0,
+        ) -> list[dict]:
+            """List memories with optional filters and pagination."""
+
+        def count_memories(
+            self,
+            namespace: str | None = None,
+            memory_type: str | None = None,
+        ) -> int:
+            """Count memories with optional filters."""
         ```
         </method_signatures>
 
