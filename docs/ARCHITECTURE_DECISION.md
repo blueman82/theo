@@ -192,6 +192,22 @@ src/theo/tools/               # Update to use new storage
 1. Concurrent writes → sqlite-vec fixes this
 2. Non-blocking async operations → Still need job queue pattern
 
+### Proven Pattern from Recall (from memories)
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│   StoreQueue    │     │ EmbeddingBatcher │     │   embed_worker  │
+│  (SQLite FIFO)  │────►│   (add/flush)    │────►│ (async task)    │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+     enqueue()              add() O(1)              poll loop
+     (immediate)            flush() → MLX          gc + clear_cache
+```
+
+**Key insight**: Queue pattern works regardless of architecture:
+- Daemon: SQLite queue + separate process worker
+- MCP: SQLite queue + asyncio.Task worker
+- Hooks/Skills: SQLite pending_embeds table + flush at session end
+
 **Solution: In-Process Job Queue**
 
 ```python
