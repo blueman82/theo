@@ -1043,8 +1043,8 @@ class DaemonServer:
         # HybridStore for direct memory writes (initialized in start())
         self.hybrid_store: HybridStore | None = None
 
-        # ChromaStore for document storage (initialized in start())
-        self.chroma_store = None
+        # SQLiteStore for document storage (initialized in start())
+        self.sqlite_store = None
 
         # Memory management tasks (initialized in start())
         self._gc_task: asyncio.Task[None] | None = None
