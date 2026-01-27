@@ -148,12 +148,6 @@ plan:
         documentation_targets: []
 
       description: |
-        <mandatory_principles>
-        ENGINEERING: YAGNI, KISS, DRY, Fail Fast, Law of Demeter, Single Source of Truth.
-        PYTHONIC: PEP 8 naming, full type hints (Pyright strict), EAFP over LBYL, context managers.
-        CODE REDUCTION: Use UPSERT (INSERT OR REPLACE) not separate add/update methods.
-        </mandatory_principles>
-
         <exact_sql_schema>
         Add these tables to _init_schema() method:
 
