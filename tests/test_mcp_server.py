@@ -215,7 +215,7 @@ class TestIndexingTools:
         result = asyncio.run(tools.index_directory(str(tmp_path)))
 
         assert result["success"] is True
-        assert result["data"]["files_indexed"] == 0
+        assert result["data"]["files_processed"] == 0
         assert "no supported files" in result["data"]["message"].lower()
 
 
