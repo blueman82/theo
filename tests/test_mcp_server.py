@@ -430,7 +430,7 @@ class TestMemoryTools:
             namespace="global",
             memory_type="preference",
             confidence=0.5,
-            metadata={"importance": 0.8},
+            importance=0.8,
         )
         mock_result = SearchResult(
             document=mock_doc,
