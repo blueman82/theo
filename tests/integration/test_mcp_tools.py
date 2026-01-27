@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from theo.chunking import ChunkerRegistry
-from theo.storage import ChromaStore
+from theo.storage import SQLiteStore
 from theo.tools import IndexingTools, ManagementTools, MemoryTools, QueryTools
 from theo.validation import FeedbackCollector, ValidationLoop
 
@@ -33,10 +33,8 @@ from theo.validation import FeedbackCollector, ValidationLoop
 
 @pytest.fixture
 def temp_db_path(tmp_path: Path) -> Path:
-    """Create temporary database directory."""
-    db_path = tmp_path / "test_mcp_db"
-    db_path.mkdir(exist_ok=True)
-    return db_path
+    """Create temporary database path."""
+    return tmp_path / "test_mcp.db"
 
 
 @pytest.fixture
@@ -90,10 +88,11 @@ def mock_daemon_client() -> MagicMock:
 
 
 @pytest.fixture
-def chroma_store(temp_db_path: Path) -> Generator[ChromaStore, None, None]:
-    """Create ChromaStore with temporary database."""
-    store = ChromaStore(db_path=temp_db_path, collection_name="test_mcp")
+def sqlite_store(temp_db_path: Path) -> Generator[SQLiteStore, None, None]:
+    """Create SQLiteStore with temporary database."""
+    store = SQLiteStore(db_path=temp_db_path)
     yield store
+    store.close()
 
 
 @pytest.fixture
@@ -103,9 +102,9 @@ def chunker_registry() -> ChunkerRegistry:
 
 
 @pytest.fixture
-def validation_loop(chroma_store: ChromaStore) -> ValidationLoop:
+def validation_loop(sqlite_store: SQLiteStore) -> ValidationLoop:
     """Create ValidationLoop."""
-    return ValidationLoop(store=chroma_store)
+    return ValidationLoop(store=sqlite_store)
 
 
 @pytest.fixture
@@ -118,7 +117,7 @@ def feedback_collector() -> FeedbackCollector:
 def all_tools(
     mock_daemon_client: MagicMock,
     chunker_registry: ChunkerRegistry,
-    chroma_store: ChromaStore,
+    sqlite_store: SQLiteStore,
     validation_loop: ValidationLoop,
     feedback_collector: FeedbackCollector,
 ) -> dict[str, Any]:
@@ -127,20 +126,20 @@ def all_tools(
         "indexing": IndexingTools(
             daemon_client=mock_daemon_client,
             chunker_registry=chunker_registry,
-            store=chroma_store,
+            store=sqlite_store,
         ),
         "query": QueryTools(
             daemon_client=mock_daemon_client,
-            store=chroma_store,
+            store=sqlite_store,
             feedback_collector=feedback_collector,
         ),
         "memory": MemoryTools(
             daemon_client=mock_daemon_client,
-            store=chroma_store,
+            store=sqlite_store,
             validation_loop=validation_loop,
         ),
-        "management": ManagementTools(store=chroma_store),
-        "store": chroma_store,
+        "management": ManagementTools(store=sqlite_store),
+        "store": sqlite_store,
     }
 
 

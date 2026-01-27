@@ -21,7 +21,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from theo.chunking import ChunkerRegistry
-from theo.storage import ChromaStore
+from theo.storage import SQLiteStore
 from theo.tools import IndexingTools, ManagementTools, MemoryTools, QueryTools
 from theo.validation import FeedbackCollector, ValidationLoop
 
@@ -33,17 +33,15 @@ from theo.validation import FeedbackCollector, ValidationLoop
 
 @pytest.fixture
 def temp_db_path(tmp_path: Path) -> Path:
-    """Create temporary database directory.
+    """Create temporary database path.
 
     Args:
         tmp_path: pytest temporary directory fixture
 
     Returns:
-        Path to temporary database directory
+        Path to temporary database file
     """
-    db_path = tmp_path / "test_chroma_db"
-    db_path.mkdir(exist_ok=True)
-    return db_path
+    return tmp_path / "test_theo.db"
 
 
 @pytest.fixture
@@ -101,17 +99,18 @@ def mock_daemon_client() -> MagicMock:
 
 
 @pytest.fixture
-def chroma_store(temp_db_path: Path) -> Generator[ChromaStore, None, None]:
-    """Create ChromaStore instance with temporary database.
+def sqlite_store(temp_db_path: Path) -> Generator[SQLiteStore, None, None]:
+    """Create SQLiteStore instance with temporary database.
 
     Args:
         temp_db_path: Temporary database path fixture
 
     Yields:
-        ChromaStore instance for testing
+        SQLiteStore instance for testing
     """
-    store = ChromaStore(db_path=temp_db_path, collection_name="test_collection")
+    store = SQLiteStore(db_path=temp_db_path)
     yield store
+    store.close()
 
 
 @pytest.fixture
@@ -125,16 +124,16 @@ def chunker_registry() -> ChunkerRegistry:
 
 
 @pytest.fixture
-def validation_loop(chroma_store: ChromaStore) -> ValidationLoop:
+def validation_loop(sqlite_store: SQLiteStore) -> ValidationLoop:
     """Create ValidationLoop instance.
 
     Args:
-        chroma_store: ChromaStore fixture
+        sqlite_store: SQLiteStore fixture
 
     Returns:
         ValidationLoop for confidence scoring
     """
-    return ValidationLoop(store=chroma_store)
+    return ValidationLoop(store=sqlite_store)
 
 
 @pytest.fixture
@@ -151,14 +150,14 @@ def feedback_collector() -> FeedbackCollector:
 def indexing_tools(
     mock_daemon_client: MagicMock,
     chunker_registry: ChunkerRegistry,
-    chroma_store: ChromaStore,
+    sqlite_store: SQLiteStore,
 ) -> IndexingTools:
     """Create IndexingTools instance.
 
     Args:
         mock_daemon_client: Mock daemon client fixture
         chunker_registry: ChunkerRegistry fixture
-        chroma_store: ChromaStore fixture
+        sqlite_store: SQLiteStore fixture
 
     Returns:
         IndexingTools for document indexing
@@ -166,21 +165,21 @@ def indexing_tools(
     return IndexingTools(
         daemon_client=mock_daemon_client,
         chunker_registry=chunker_registry,
-        store=chroma_store,
+        store=sqlite_store,
     )
 
 
 @pytest.fixture
 def query_tools(
     mock_daemon_client: MagicMock,
-    chroma_store: ChromaStore,
+    sqlite_store: SQLiteStore,
     feedback_collector: FeedbackCollector,
 ) -> QueryTools:
     """Create QueryTools instance.
 
     Args:
         mock_daemon_client: Mock daemon client fixture
-        chroma_store: ChromaStore fixture
+        sqlite_store: SQLiteStore fixture
         feedback_collector: FeedbackCollector fixture
 
     Returns:
@@ -188,7 +187,7 @@ def query_tools(
     """
     return QueryTools(
         daemon_client=mock_daemon_client,
-        store=chroma_store,
+        store=sqlite_store,
         feedback_collector=feedback_collector,
     )
 
@@ -196,14 +195,14 @@ def query_tools(
 @pytest.fixture
 def memory_tools(
     mock_daemon_client: MagicMock,
-    chroma_store: ChromaStore,
+    sqlite_store: SQLiteStore,
     validation_loop: ValidationLoop,
 ) -> MemoryTools:
     """Create MemoryTools instance.
 
     Args:
         mock_daemon_client: Mock daemon client fixture
-        chroma_store: ChromaStore fixture
+        sqlite_store: SQLiteStore fixture
         validation_loop: ValidationLoop fixture
 
     Returns:
@@ -211,22 +210,22 @@ def memory_tools(
     """
     return MemoryTools(
         daemon_client=mock_daemon_client,
-        store=chroma_store,
+        store=sqlite_store,
         validation_loop=validation_loop,
     )
 
 
 @pytest.fixture
-def management_tools(chroma_store: ChromaStore) -> ManagementTools:
+def management_tools(sqlite_store: SQLiteStore) -> ManagementTools:
     """Create ManagementTools instance.
 
     Args:
-        chroma_store: ChromaStore fixture
+        sqlite_store: SQLiteStore fixture
 
     Returns:
         ManagementTools for collection management
     """
-    return ManagementTools(store=chroma_store)
+    return ManagementTools(store=sqlite_store)
 
 
 @pytest.fixture
@@ -364,7 +363,7 @@ class TestIndexingPipeline:
         self,
         indexing_tools: IndexingTools,
         sample_markdown_file: Path,
-        chroma_store: ChromaStore,
+        sqlite_store: SQLiteStore,
     ):
         """Test indexing a Markdown file through full pipeline."""
         # Index the document
@@ -377,7 +376,7 @@ class TestIndexingPipeline:
         assert str(sample_markdown_file) in result["data"]["source_file"]
 
         # Verify chunks are in storage
-        count = chroma_store.count()
+        count = sqlite_store.count_memories()
         assert count == result["data"]["chunks_created"]
 
     @pytest.mark.asyncio
@@ -385,7 +384,7 @@ class TestIndexingPipeline:
         self,
         indexing_tools: IndexingTools,
         sample_python_file: Path,
-        chroma_store: ChromaStore,
+        sqlite_store: SQLiteStore,
     ):
         """Test indexing a Python file through full pipeline."""
         # Index the document
@@ -395,16 +394,17 @@ class TestIndexingPipeline:
         assert result["success"] is True
         assert result["data"]["chunks_created"] > 0
 
-        # Verify metadata includes source file
-        stats = chroma_store.get_stats()
-        assert str(sample_python_file) in stats.source_files
+        # Verify memories are stored (SQLiteStore doesn't have get_stats with source_files)
+        memories = sqlite_store.list_memories(limit=100)
+        source_files = {m.get("source_file") for m in memories if m.get("source_file")}
+        assert str(sample_python_file) in source_files
 
     @pytest.mark.asyncio
     async def test_index_text_document(
         self,
         indexing_tools: IndexingTools,
         sample_text_file: Path,
-        chroma_store: ChromaStore,
+        sqlite_store: SQLiteStore,
     ):
         """Test indexing a plain text file through full pipeline."""
         # Index the document
@@ -415,7 +415,7 @@ class TestIndexingPipeline:
         assert result["data"]["chunks_created"] > 0
 
         # Verify content is stored
-        count = chroma_store.count()
+        count = sqlite_store.count_memories()
         assert count > 0
 
     @pytest.mark.asyncio
@@ -425,7 +425,7 @@ class TestIndexingPipeline:
         sample_markdown_file: Path,
         sample_python_file: Path,  # noqa: ARG002 - fixture creates file
         sample_text_file: Path,  # noqa: ARG002 - fixture creates file
-        chroma_store: ChromaStore,
+        sqlite_store: SQLiteStore,
     ):
         """Test indexing a directory with multiple files."""
         # Get the directory containing our sample files (all fixtures create in same dir)
@@ -442,15 +442,16 @@ class TestIndexingPipeline:
         assert result["data"]["total_chunks"] > 0
 
         # Verify all files are in storage
-        stats = chroma_store.get_stats()
-        assert stats.unique_sources >= 3
+        memories = sqlite_store.list_memories(limit=100)
+        source_files = {m.get("source_file") for m in memories if m.get("source_file")}
+        assert len(source_files) >= 3
 
     @pytest.mark.asyncio
     async def test_reindex_file_replaces_content(
         self,
         indexing_tools: IndexingTools,
         sample_text_file: Path,
-        chroma_store: ChromaStore,
+        sqlite_store: SQLiteStore,
     ):
         """Test that re-indexing a file replaces existing chunks."""
         # Index the file first time
@@ -467,7 +468,7 @@ class TestIndexingPipeline:
         assert result2["success"] is True
 
         # Verify total count is the new chunk count (not accumulated)
-        final_count = chroma_store.count()
+        final_count = sqlite_store.count_memories()
         assert final_count == result2["data"]["chunks_created"]
 
 
