@@ -667,6 +667,7 @@ class TestQuickEmbed:
             assert embeddings == [[0.1, 0.2]]
 
 
+@pytest.mark.xdist_group("daemon")
 class TestModuleLevelFunctions:
     """Test module-level convenience functions."""
 
