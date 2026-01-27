@@ -2,11 +2,10 @@
 
 This module provides reusable fixtures for testing:
 - mock_embedder: Returns fake embeddings without MLX/Ollama
-- temp_chroma: Temporary ChromaDB instance for isolated testing
 - temp_dir: Temporary directory for file operations
 
 Usage:
-    def test_something(mock_embedder, temp_chroma):
+    def test_something(mock_embedder, temp_dir):
         # Tests run with mock dependencies
         pass
 """
