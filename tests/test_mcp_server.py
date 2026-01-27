@@ -260,7 +260,7 @@ class TestQueryTools:
             chunk_index=0,
             content_hash="abc123",
             namespace="default",
-            doc_type="document",
+            memory_type="document",
             confidence=1.0,
         )
         mock_result = SearchResult(
@@ -302,7 +302,7 @@ class TestQueryTools:
                 chunk_index=i,
                 content_hash=f"hash_{i}",
                 namespace="default",
-                doc_type="document",
+                memory_type="document",
                 confidence=1.0,
             )
             docs.append(
@@ -428,7 +428,7 @@ class TestMemoryTools:
             chunk_index=0,
             content_hash="xyz789",
             namespace="global",
-            doc_type="preference",
+            memory_type="preference",
             confidence=0.5,
             metadata={"importance": 0.8},
         )
