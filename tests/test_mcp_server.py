@@ -196,7 +196,7 @@ class TestIndexingTools:
         assert result["data"]["chunks_created"] == 2
         assert str(test_file) in result["data"]["source_file"]
         mock_daemon_client.embed.assert_called_once()
-        mock_store.add_memory.assert_called_once()
+        assert mock_store.add_memory.call_count == 2  # Once per chunk
 
     def test_index_directory_empty(
         self, mock_daemon_client, mock_chunker_registry, mock_store, tmp_path
