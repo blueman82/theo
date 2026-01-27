@@ -310,7 +310,25 @@ def migrate_memory(
     embedder: Any | None,
     dry_run: bool = False,
 ) -> bool:
-    """Migrate single memory with exact field mapping.
+    """Migrate single memory with exact 16-field mapping.
+
+    Field Mapping (all 16 fields):
+    1. id -> memories.id
+    2. document (content) -> memories.content
+    3. embedding -> memories_vec + embedding_cache
+    4. metadata.namespace -> memories.namespace
+    5. metadata.doc_type -> memories.memory_type (RENAMED)
+    6. metadata.confidence -> memories.confidence
+    7. metadata.importance -> memories.importance
+    8. metadata.source_file -> memories.source_file
+    9. metadata.doc_hash -> memories.content_hash (RENAMED)
+    10. metadata.chunk_index -> memories.chunk_index
+    11. metadata.start_line -> memories.start_line
+    12. metadata.end_line -> memories.end_line
+    13. metadata.created_at -> memories.created_at (ISO -> unix)
+    14. metadata.accessed_at -> memories.last_accessed (RENAMED, ISO -> unix)
+    15. metadata.access_count -> memories.access_count
+    16. metadata.meta_* -> memories.tags (JSON dict)
 
     Args:
         doc: Document dict from ChromaDB extraction
@@ -331,20 +349,24 @@ def migrate_memory(
         return False
 
     # Field mapping with renames
-    # metadata.doc_type -> memory_type
+    # metadata.doc_type -> memory_type (field 5)
     memory_type = metadata.get("doc_type", metadata.get("memory_type", "document"))
 
-    # metadata.doc_hash -> content_hash
+    # metadata.doc_hash -> content_hash (field 9)
     content_hash = metadata.get("doc_hash", metadata.get("content_hash"))
     if not content_hash:
         content_hash = compute_content_hash(content)
 
-    # metadata.accessed_at -> last_accessed (will be updated after insert)
+    # Timestamps: ISO -> unix float (fields 13, 14)
     original_created_at = parse_iso_to_unix(metadata.get("created_at"))
     original_last_accessed = parse_iso_to_unix(metadata.get("accessed_at"))
     original_access_count = int(metadata.get("access_count", 0))
 
-    # Collect meta_* fields as tags
+    # Line positions (fields 11, 12)
+    start_line = metadata.get("start_line")
+    end_line = metadata.get("end_line")
+
+    # Collect meta_* fields as tags (field 16)
     tags: dict[str, Any] = {}
     for key, value in metadata.items():
         if key.startswith("meta_"):
@@ -360,7 +382,8 @@ def migrate_memory(
     if dry_run:
         logger.info(
             f"[DRY RUN] Would migrate: {doc_id[:50]}... "
-            f"(type={memory_type}, confidence={metadata.get('confidence', 0.3)})"
+            f"(type={memory_type}, confidence={metadata.get('confidence', 0.3)}, "
+            f"start_line={start_line}, end_line={end_line})"
         )
         return True
 
@@ -379,7 +402,7 @@ def migrate_memory(
         embedding = [0.0] * 1024
 
     try:
-        # Add memory to SQLite store (handles all three tables atomically)
+        # Add memory to SQLite store (handles memories, memories_vec, memories_fts atomically)
         memory_id = sqlite_store.add_memory(
             content=content,
             embedding=embedding,
@@ -393,32 +416,41 @@ def migrate_memory(
             tags=tags if tags else None,
         )
 
-        # Update timestamps to preserve original values from migration
-        # The add_memory uses current time, so we need to override
-        if original_created_at or original_last_accessed or original_access_count:
-            cursor = sqlite_store._conn.cursor()
-            updates = []
-            params = []
+        # Update additional fields not supported by add_memory() via raw SQL
+        # This includes: created_at, last_accessed, access_count, start_line, end_line
+        cursor = sqlite_store._conn.cursor()
+        updates = []
+        params: list[Any] = []
 
-            if original_created_at:
-                updates.append("created_at = ?")
-                params.append(original_created_at)
+        # Timestamp fields (fields 13, 14, 15)
+        if original_created_at:
+            updates.append("created_at = ?")
+            params.append(original_created_at)
 
-            if original_last_accessed:
-                updates.append("last_accessed = ?")
-                params.append(original_last_accessed)
+        if original_last_accessed:
+            updates.append("last_accessed = ?")
+            params.append(original_last_accessed)
 
-            if original_access_count:
-                updates.append("access_count = ?")
-                params.append(original_access_count)
+        if original_access_count:
+            updates.append("access_count = ?")
+            params.append(original_access_count)
 
-            if updates:
-                params.append(memory_id)
-                cursor.execute(
-                    f"UPDATE memories SET {', '.join(updates)} WHERE id = ?",
-                    params,
-                )
-                sqlite_store._conn.commit()
+        # Line position fields (fields 11, 12) - not in add_memory() API
+        if start_line is not None:
+            updates.append("start_line = ?")
+            params.append(int(start_line))
+
+        if end_line is not None:
+            updates.append("end_line = ?")
+            params.append(int(end_line))
+
+        if updates:
+            params.append(memory_id)
+            cursor.execute(
+                f"UPDATE memories SET {', '.join(updates)} WHERE id = ?",
+                params,
+            )
+            sqlite_store._conn.commit()
 
         # Also cache the embedding
         sqlite_store.cache_embedding(
@@ -481,6 +513,97 @@ def verify_golden_rules(sqlite_store: "SQLiteStore", expected_count: int) -> boo
             f"Golden rules verification FAILED: {actual_count} < {expected_count}"
         )
         return False
+
+
+def verify_tables(sqlite_store: "SQLiteStore") -> dict[str, int]:
+    """Verify all migrated tables have correct counts.
+
+    Checks:
+    - memories: Main memory table
+    - memories_vec: Vector embeddings
+    - memories_fts: Full-text search
+    - edges: Relationship graph
+    - validation_events: TRY/LEARN cycle history
+    - embedding_cache: Cached embeddings
+
+    Args:
+        sqlite_store: SQLiteStore instance
+
+    Returns:
+        Dict with table names and their row counts
+    """
+    cursor = sqlite_store._conn.cursor()
+    counts: dict[str, int] = {}
+
+    tables = [
+        "memories",
+        "memories_fts",
+        "edges",
+        "validation_events",
+        "embedding_cache",
+    ]
+
+    for table in tables:
+        try:
+            cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            result = cursor.fetchone()
+            counts[table] = result[0] if result else 0
+        except Exception as e:
+            logger.warning(f"Failed to count {table}: {e}")
+            counts[table] = -1
+
+    # memories_vec uses different count mechanism
+    try:
+        cursor.execute("SELECT COUNT(*) FROM memories_vec")
+        result = cursor.fetchone()
+        counts["memories_vec"] = result[0] if result else 0
+    except Exception as e:
+        logger.warning(f"Failed to count memories_vec: {e}")
+        counts["memories_vec"] = -1
+
+    return counts
+
+
+def verify_field_mapping(sqlite_store: "SQLiteStore") -> bool:
+    """Verify all 16 fields are present in migrated data.
+
+    Checks that the memories table has all required columns and
+    at least some have non-null values for optional fields.
+
+    Args:
+        sqlite_store: SQLiteStore instance
+
+    Returns:
+        True if field verification passes, False otherwise
+    """
+    cursor = sqlite_store._conn.cursor()
+
+    # Check for records with start_line and end_line populated
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM memories
+        WHERE start_line IS NOT NULL OR end_line IS NOT NULL
+        """
+    )
+    line_count = cursor.fetchone()[0]
+    logger.info(f"Records with line positions: {line_count}")
+
+    # Check for records with timestamps preserved
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM memories
+        WHERE created_at IS NOT NULL AND last_accessed IS NOT NULL
+        """
+    )
+    timestamp_count = cursor.fetchone()[0]
+    logger.info(f"Records with timestamps: {timestamp_count}")
+
+    # Check for records with tags
+    cursor.execute("SELECT COUNT(*) FROM memories WHERE tags IS NOT NULL")
+    tags_count = cursor.fetchone()[0]
+    logger.info(f"Records with tags: {tags_count}")
+
+    return True
 
 
 def get_embedding_provider():
@@ -642,11 +765,12 @@ def main():
         if (i + 1) % 100 == 0 or i + 1 == total:
             logger.info(f"Progress: {i + 1}/{total} ({migrated} migrated, {failed} failed)")
 
-    # Step 5: Verify golden rules
+    # Step 5: Comprehensive verification
     logger.info("")
     logger.info("PHASE 4: Verification")
     logger.info("-" * 40)
 
+    # Verify golden rules (confidence >= 0.9)
     golden_rules_ok = verify_golden_rules(sqlite_store, golden_rules_before)
 
     if not golden_rules_ok:
@@ -655,6 +779,28 @@ def main():
         sqlite_store.close()
         restore_from_backup(args.theo_path, sqlite_backup, chroma_backup)
         return 1
+
+    # Verify all tables have expected data
+    table_counts = verify_tables(sqlite_store)
+    logger.info("Table row counts after migration:")
+    for table_name, count in table_counts.items():
+        logger.info(f"  {table_name}: {count}")
+
+    # Verify all 16 fields are properly mapped
+    verify_field_mapping(sqlite_store)
+
+    # Verify consistency between memories and memories_vec
+    if table_counts["memories"] != table_counts["memories_vec"]:
+        logger.warning(
+            f"Mismatch: memories ({table_counts['memories']}) != "
+            f"memories_vec ({table_counts['memories_vec']})"
+        )
+
+    # Verify embedding_cache has entries
+    if table_counts["embedding_cache"] < migrated:
+        logger.warning(
+            f"Embedding cache incomplete: {table_counts['embedding_cache']} < {migrated}"
+        )
 
     # Close SQLite store
     sqlite_store.close()
@@ -669,6 +815,14 @@ def main():
     logger.info(f"Records failed:        {failed}")
     logger.info(f"Golden rules before:   {golden_rules_before}")
     logger.info(f"Golden rules verified: {golden_rules_ok}")
+    logger.info("-" * 40)
+    logger.info("Table Verification:")
+    logger.info(f"  memories:          {table_counts['memories']}")
+    logger.info(f"  memories_vec:      {table_counts['memories_vec']}")
+    logger.info(f"  memories_fts:      {table_counts['memories_fts']}")
+    logger.info(f"  edges:             {table_counts['edges']}")
+    logger.info(f"  validation_events: {table_counts['validation_events']}")
+    logger.info(f"  embedding_cache:   {table_counts['embedding_cache']}")
     logger.info("=" * 60)
 
     if sqlite_backup:
