@@ -94,13 +94,6 @@ plan:
         documentation_targets: []
 
       description: |
-        <mandatory_principles>
-        ENGINEERING: YAGNI (only what's needed), KISS (minimal complexity), DRY (no duplication).
-        PYTHONIC: PEP 8 naming, full type hints, f-strings, explicit imports.
-        MINIMIZE: Modify existing files, no new files unless essential.
-        </mandatory_principles>
-
-        <task_description>
         Add sqlite-vec package as dependency to pyproject.toml.
 
         In [project] dependencies section, ADD:
@@ -108,7 +101,6 @@ plan:
 
         Keep chromadb temporarily - needed for migration script in Task 12.
         Run: uv sync --dev
-        </task_description>
 
       implementation:
         approach: |
