@@ -1245,10 +1245,6 @@ plan:
         documentation_targets: []
 
       description: |
-        <mandatory_principles>
-        CODE REDUCTION: Remove unused dependency.
-        </mandatory_principles>
-
         <overall_success_criteria>
         Final verification (from original plan Part 9):
         - [ ] All existing memories recoverable
