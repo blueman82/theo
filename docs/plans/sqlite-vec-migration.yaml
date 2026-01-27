@@ -576,12 +576,30 @@ plan:
         approach: |
           Replace ChromaDB serialization with SQLite row conversion.
         key_points:
-          - point: "Document.to_dict() for INSERT"
+          - point: "Rename doc_type field to memory_type"
+            details: "Match SQLite schema naming"
+            reference: "src/theo/storage/types.py:Document"
+          - point: "Rename doc_hash field to content_hash"
+            details: "Match SQLite schema naming"
+            reference: "src/theo/storage/types.py:Document"
+          - point: "Rename accessed_at field to last_accessed"
+            details: "Match SQLite schema naming"
+            reference: "src/theo/storage/types.py:Document"
+          - point: "Remove to_chroma_metadata() method"
+            details: "ChromaDB serialization no longer needed"
+            reference: "src/theo/storage/types.py:Document"
+          - point: "Remove from_chroma_result() classmethods"
+            details: "Both Document and SearchResult"
+            reference: "src/theo/storage/types.py"
+          - point: "Add Document.to_dict() for INSERT"
             details: "Returns dict with column names matching memories table"
-            reference: "src/theo/storage/types.py"
-          - point: "Document.from_row() for SELECT"
+            reference: "src/theo/storage/types.py:Document"
+          - point: "Add Document.from_row(row: sqlite3.Row)"
             details: "Creates Document from sqlite3.Row"
-            reference: "src/theo/storage/types.py"
+            reference: "src/theo/storage/types.py:Document"
+          - point: "Add SearchResult.from_sqlite(doc, distance, rank)"
+            details: "similarity = 1.0 - distance"
+            reference: "src/theo/storage/types.py:SearchResult"
 
       code_quality:
         python:
