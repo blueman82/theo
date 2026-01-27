@@ -21,11 +21,9 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import logging
 import sqlite3
 import sys
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
