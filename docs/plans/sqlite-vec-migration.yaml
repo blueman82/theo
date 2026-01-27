@@ -868,10 +868,10 @@ plan:
 
       success_criteria:
         - "ChromaStore imports replaced with SQLiteStore in all files"
-        - "memory_tools uses SQLiteStore for memory operations"
-        - "query_tools uses SQLiteStore.search_hybrid()"
-        - "indexing_tools uses SQLiteStore.add_memory()"
-        - "management_tools uses SQLiteStore stats methods"
+        - "memory_tools.py uses SQLiteStore for memory_store, memory_recall, memory_forget"
+        - "query_tools.py search() uses SQLiteStore.search_hybrid()"
+        - "indexing_tools.py uses SQLiteStore.add_memory()"
+        - "management_tools.py uses SQLiteStore stats methods"
         - "No TODO comments"
 
       test_commands:
