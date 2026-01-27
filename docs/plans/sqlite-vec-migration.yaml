@@ -1537,12 +1537,62 @@ plan:
             [qa-expert] All success criteria have been met. tests/test_sqlite_store.py exists with 40 comprehensive tests covering all required functionality. tests/test_chroma_store.py has been deleted (no longer exists). All tests pass with uv run pytest tests/test_sqlite_store.py -v (40 passed in 0.44s). No TODO comments found. The test file uses in-memory SQLite with ':memory:' and mock embeddings of [0.1] * 1024 for 1024-dim vectors.
           timestamp: "2026-01-27T08:59:16Z"
       completed_date: "2026-01-27"
+    - task_number: "15"
+      name: "Update integration tests for SQLiteStore"
+      agent: "test-automator"
+      files:
+        - "tests/integration/test_full_pipeline.py"
+        - "tests/integration/test_mcp_tools.py"
+      depends_on: [11]
+      success_criteria:
+        - "tests/integration/test_full_pipeline.py imports SQLiteStore instead of ChromaStore"
+        - "tests/integration/test_mcp_tools.py imports SQLiteStore instead of ChromaStore"
+        - "All ChromaStore references replaced with SQLiteStore"
+        - "Tests use SQLiteStore API (add_memory, search_hybrid, etc.)"
+        - "uv run pytest tests/integration/ -v passes"
+        - "No TODO comments"
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/integration/ -v"
+      runtime_metadata:
+        dependency_checks:
+          - command: "grep -r 'ChromaStore' /Users/harrison/Documents/Github/theo/tests/integration/ || echo 'None'"
+            description: "Check for remaining ChromaStore imports"
+        documentation_targets: []
+      description: |
+        <task_description>
+        Update integration tests to use SQLiteStore instead of ChromaStore:
+
+        In both test files:
+        1. Change: from theo.storage import ChromaStore → from theo.storage import SQLiteStore
+        2. Replace ChromaStore() instantiation with SQLiteStore(":memory:")
+        3. Update any ChromaStore-specific API calls to SQLiteStore equivalents
+        4. Ensure tests pass with uv run pytest tests/integration/ -v
+        </task_description>
+      implementation:
+        approach: |
+          Find-replace ChromaStore with SQLiteStore, update instantiation.
+        key_points:
+          - point: "Replace ChromaStore import"
+            details: "from theo.storage import SQLiteStore instead of ChromaStore"
+            reference: "tests/integration/*.py"
+          - point: "Update instantiation"
+            details: "SQLiteStore(':memory:') instead of ChromaStore()"
+            reference: "tests/integration/*.py"
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/integration/ -v"
+            exit_on_failure: true
+      commit:
+        type: "test"
+        message: "Update integration tests to use SQLiteStore"
+        files: ["tests/integration/**"]
     - task_number: "14"
       name: "Remove chromadb dependency"
       agent: "python-pro"
       files:
         - "pyproject.toml"
-      depends_on: [11, 12, 13]
+      depends_on: [11, 12, 13, 15]
       success_criteria:
         - "chromadb>=0.4.0 removed from [project].dependencies"
         - "chromadb.* removed from [[tool.mypy.overrides]] module list"
