@@ -12,7 +12,6 @@ dependencies = [
     # MCP Protocol
     "mcp[cli]>=1.2.0",
     # Vector Storage
-    "chromadb>=0.4.0",
     "sqlite-vec>=0.1.6",
     # Embeddings - Apple Silicon optimized
     "mlx-embeddings>=0.0.5",
@@ -65,7 +64,6 @@ ignore_missing_imports = false
 
 [[tool.mypy.overrides]]
 module = [
-    "chromadb.*",
     "pypdf.*",
     "pydantic_settings",
     "mcp.*",
