@@ -5,7 +5,7 @@ type from the storage module. New code should prefer using MemoryDocument
 from theo.types.memory for the unified type system.
 
 The Document type in storage/types.py is a dataclass used directly by
-ChromaStore. MemoryDocument is the higher-level Pydantic model that
+SQLiteStore. MemoryDocument is the higher-level Pydantic model that
 can convert to/from the storage format.
 """
 
