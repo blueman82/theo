@@ -13,7 +13,7 @@ import logging
 from typing import Any, Optional
 
 from theo.daemon import DaemonClient
-from theo.storage import ChromaStore, SearchResult
+from theo.storage.sqlite_store import SQLiteStore, SearchResult as SQLiteSearchResult
 from theo.validation import FeedbackCollector, UsageFeedback
 from theo.validation.feedback import FeedbackType
 
@@ -35,12 +35,12 @@ class QueryTools:
 
     Architectural justification:
     - DaemonClient handles query embedding asynchronously
-    - ChromaStore provides vector and hybrid search
+    - SQLiteStore provides vector, FTS, and hybrid search via sqlite-vec + FTS5
     - FeedbackCollector aggregates usage signals for validation
 
     Args:
         daemon_client: Client for daemon embedding operations
-        store: ChromaDB storage instance
+        store: SQLiteStore instance for all storage operations
         feedback_collector: Optional collector for validation feedback
 
     Example:
@@ -53,14 +53,14 @@ class QueryTools:
     def __init__(
         self,
         daemon_client: DaemonClient,
-        store: ChromaStore,
+        store: SQLiteStore,
         feedback_collector: Optional[FeedbackCollector] = None,
     ) -> None:
         """Initialize QueryTools with dependencies.
 
         Args:
             daemon_client: Client for daemon embedding operations
-            store: ChromaDB storage instance
+            store: SQLiteStore instance for all storage operations
             feedback_collector: Optional collector for validation feedback
         """
         self._daemon = daemon_client
@@ -80,34 +80,34 @@ class QueryTools:
         """
         return len(text) // CHARS_PER_TOKEN
 
-    def _result_to_dict(self, result: SearchResult, rank: int) -> dict[str, Any]:
-        """Convert SearchResult to response dictionary.
+    def _result_to_dict(self, result: SQLiteSearchResult, rank: int) -> dict[str, Any]:
+        """Convert SQLiteSearchResult to response dictionary.
 
         Args:
-            result: SearchResult from ChromaStore
+            result: SQLiteSearchResult from SQLiteStore
             rank: Position in result set (0-indexed)
 
         Returns:
             Dictionary with result data
         """
-        doc = result.document
+        # SQLiteStore.SQLiteSearchResult is a dataclass with direct attributes
         return {
-            "id": doc.id,
-            "content": doc.content,
-            "source_file": doc.source_file,
-            "chunk_index": doc.chunk_index,
-            "namespace": doc.namespace,
-            "doc_type": doc.doc_type,
-            "confidence": doc.confidence,
-            "similarity": result.similarity,
-            "distance": result.distance,
+            "id": result.id,
+            "content": result.content,
+            "source_file": result.source_file,
+            "chunk_index": result.chunk_index,
+            "namespace": result.namespace,
+            "doc_type": result.memory_type,
+            "confidence": result.confidence,
+            "similarity": result.score,
+            "distance": 1.0 - result.score,  # Convert similarity to distance
             "rank": rank,
-            "token_estimate": self._estimate_tokens(doc.content),
+            "token_estimate": self._estimate_tokens(result.content),
         }
 
     def _record_feedback(
         self,
-        results: list[SearchResult],
+        results: list[SQLiteSearchResult],
         query: str,
     ) -> None:
         """Record search results for validation feedback.
@@ -121,8 +121,9 @@ class QueryTools:
 
         for result in results:
             # Record implicit usage - documents were retrieved
+            # SQLiteStore.SQLiteSearchResult has id directly (not nested in document)
             feedback = UsageFeedback(
-                doc_id=result.document.id,
+                doc_id=result.id,
                 was_helpful=True,  # Retrieved = potentially helpful
                 feedback_type=FeedbackType.IMPLICIT_USED,
                 context=query,
@@ -136,8 +137,8 @@ class QueryTools:
     ) -> dict[str, Any]:
         """Perform semantic search for a query.
 
-        Generates query embedding via daemon and searches ChromaDB
-        for similar documents.
+        Generates query embedding via daemon and searches SQLiteStore
+        for similar documents using sqlite-vec.
 
         Args:
             query: Search query string
@@ -173,9 +174,9 @@ class QueryTools:
                     "error": "No query embedding returned",
                 }
 
-            # Search ChromaDB
-            results = self._store.search(
-                query_embedding=query_embedding,
+            # Search using SQLiteStore.search_vector (KNN via sqlite-vec)
+            results = self._store.search_vector(
+                embedding=query_embedding,
                 n_results=n_results,
             )
 
@@ -251,9 +252,10 @@ class QueryTools:
                     "error": "No query embedding returned",
                 }
 
-            # Search ChromaDB with filters
-            results = self._store.search(
-                query_embedding=query_embedding,
+            # Search using SQLiteStore.search_vector with filters
+            # SQLiteStore.search_vector supports where filters
+            results = self._store.search_vector(
+                embedding=query_embedding,
                 n_results=n_results,
                 where=filters,
             )
@@ -339,8 +341,8 @@ class QueryTools:
                 }
 
             # Fetch more results than needed to ensure we have enough after budget filtering
-            results = self._store.search(
-                query_embedding=query_embedding,
+            results = self._store.search_vector(
+                embedding=query_embedding,
                 n_results=20,  # Fetch extra for budget filtering
             )
 
@@ -391,14 +393,14 @@ class QueryTools:
     ) -> dict[str, Any]:
         """Perform hybrid search combining vector and text matching.
 
-        Uses ChromaStore's hybrid_search which combines vector similarity
-        with full-text search for better recall.
+        Uses SQLiteStore's search_hybrid which combines vector similarity
+        (sqlite-vec) with full-text search (FTS5) using RRF scoring.
 
         Args:
             query: Search query string
             n_results: Maximum number of results to return (default: 5)
             fts_weight: Weight for FTS results in final ranking (0.0-1.0)
-            min_vector_similarity: Minimum similarity to skip FTS augmentation
+            min_vector_similarity: Minimum similarity to skip FTS augmentation (unused)
 
         Returns:
             Dictionary with:
@@ -430,22 +432,23 @@ class QueryTools:
                     "error": "No query embedding returned",
                 }
 
-            # Perform hybrid search
-            hybrid_result = self._store.hybrid_search(
-                query_embedding=query_embedding,
-                query_text=query,
+            # Perform hybrid search using SQLiteStore.search_hybrid
+            # Note: vector_weight = 1.0 - fts_weight
+            vector_weight = 1.0 - fts_weight
+            results = self._store.search_hybrid(
+                embedding=query_embedding,
+                query=query,
                 n_results=n_results,
-                fts_weight=fts_weight,
-                min_vector_similarity=min_vector_similarity,
+                vector_weight=vector_weight,
             )
 
             # Record feedback for validation loop
-            self._record_feedback(hybrid_result.results, query)
+            self._record_feedback(results, query)
 
             # Convert results to response format
             results_data = [
                 self._result_to_dict(result, i)
-                for i, result in enumerate(hybrid_result.results)
+                for i, result in enumerate(results)
             ]
 
             # Calculate total tokens in results
@@ -457,9 +460,9 @@ class QueryTools:
                     "results": results_data,
                     "total": len(results_data),
                     "query": query,
-                    "fts_used": hybrid_result.fts_used,
-                    "vector_count": hybrid_result.vector_count,
-                    "fts_count": hybrid_result.fts_count,
+                    "fts_used": True,  # search_hybrid always uses FTS
+                    "vector_count": len(results),  # Approximate
+                    "fts_count": len(results),  # Approximate
                     "total_tokens": total_tokens,
                 },
             }

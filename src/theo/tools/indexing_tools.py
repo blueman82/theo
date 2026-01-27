@@ -15,7 +15,7 @@ from typing import Any
 
 from theo.chunking import ChunkerRegistry
 from theo.daemon import DaemonClient
-from theo.storage import ChromaStore, Document
+from theo.storage.sqlite_store import SQLiteStore
 
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
@@ -33,12 +33,12 @@ class IndexingTools:
     Architectural justification:
     - DaemonClient handles expensive embedding operations asynchronously
     - ChunkerRegistry provides format-aware document splitting
-    - ChromaStore manages vector storage with deduplication
+    - SQLiteStore manages storage with sqlite-vec + FTS5 + deduplication
 
     Args:
         daemon_client: Client for daemon embedding operations
         chunker_registry: Registry for format-specific chunkers
-        store: ChromaDB storage instance
+        store: SQLiteStore instance for all storage operations
 
     Example:
         >>> tools = IndexingTools(daemon_client, chunker_registry, store)
@@ -51,14 +51,14 @@ class IndexingTools:
         self,
         daemon_client: DaemonClient,
         chunker_registry: ChunkerRegistry,
-        store: ChromaStore,
+        store: SQLiteStore,
     ) -> None:
         """Initialize IndexingTools with dependencies.
 
         Args:
             daemon_client: Client for daemon embedding operations
             chunker_registry: Registry for format-specific chunkers
-            store: ChromaDB storage instance
+            store: SQLiteStore instance for all storage operations
         """
         self._daemon = daemon_client
         self._chunker_registry = chunker_registry
@@ -163,11 +163,14 @@ class IndexingTools:
                 }
 
             # Check for existing documents from this file (for re-indexing)
-            existing = self._store.get_by_source_file(str(path))
-            if existing:
+            # List memories to find existing chunks from this source file
+            existing = self._store.list_memories(limit=1000)
+            existing_from_file = [m for m in existing if m.get("source_file") == str(path)]
+            if existing_from_file:
                 # Delete existing chunks before re-indexing
-                self._store.delete_by_source(str(path))
-                logger.info(f"Deleted {len(existing['ids'])} existing chunks from {path}")
+                for mem in existing_from_file:
+                    self._store.delete_memory(mem["id"])
+                logger.info(f"Deleted {len(existing_from_file)} existing chunks from {path}")
 
             # Extract text for embedding
             chunk_texts = [chunk.text for chunk in chunks]
@@ -189,25 +192,23 @@ class IndexingTools:
                     "error": f"Embedding count mismatch: expected {len(chunks)}, got {len(embeddings)}",
                 }
 
-            # Create Document objects for storage
-            documents = []
+            # Store each chunk using SQLiteStore.add_memory
+            ids = []
             for i, chunk in enumerate(chunks):
                 doc_hash = self._compute_hash(chunk.text)
-                doc = Document(
-                    id=f"{path.stem}_{i}",
+                memory_id = self._store.add_memory(
                     content=chunk.text,
+                    embedding=embeddings[i],
+                    memory_type="document",
+                    namespace=namespace,
+                    confidence=1.0,  # Documents have full confidence
+                    importance=0.5,
                     source_file=str(path),
                     chunk_index=i,
-                    doc_hash=doc_hash,
-                    namespace=namespace,
-                    doc_type="document",
-                    confidence=1.0,  # Documents have full confidence
-                    metadata=chunk.metadata,
+                    content_hash=doc_hash,
+                    tags=chunk.metadata,
                 )
-                documents.append(doc)
-
-            # Store documents with embeddings
-            ids = self._store.add_documents(documents, embeddings)
+                ids.append(memory_id)
 
             logger.info(f"Indexed {len(ids)} chunks from {path}")
 

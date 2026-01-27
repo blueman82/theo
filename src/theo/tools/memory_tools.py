@@ -27,7 +27,6 @@ from collections import deque
 from typing import Any, Optional
 
 from theo.daemon import DaemonClient
-from theo.storage import ChromaStore, Document
 from theo.storage.hybrid import HybridStore
 from theo.storage.sqlite_store import SQLiteStore
 from theo.types import (
@@ -88,12 +87,13 @@ class MemoryTools:
 
     Architectural justification:
     - DaemonClient handles expensive embedding operations asynchronously
-    - HybridStore manages vector storage (ChromaDB) + graph (SQLite)
+    - SQLiteStore provides unified storage (sqlite-vec + FTS5 + edges)
+    - HybridStore wraps SQLiteStore with automatic embedding generation
     - ValidationLoop tracks confidence scores through practical use
 
     Args:
         daemon_client: Client for daemon embedding operations
-        store: ChromaDB storage instance
+        store: SQLiteStore instance for all storage operations
         validation_loop: ValidationLoop for confidence scoring
         hybrid_store: Optional HybridStore for graph operations
 
@@ -111,7 +111,7 @@ class MemoryTools:
     def __init__(
         self,
         daemon_client: DaemonClient,
-        store: ChromaStore,
+        store: SQLiteStore,
         validation_loop: ValidationLoop,
         hybrid_store: Optional[HybridStore] = None,
     ) -> None:
@@ -119,7 +119,7 @@ class MemoryTools:
 
         Args:
             daemon_client: Client for daemon embedding operations
-            store: ChromaDB storage instance
+            store: SQLiteStore instance for all storage operations
             validation_loop: ValidationLoop for confidence scoring
             hybrid_store: Optional HybridStore for graph operations
         """
@@ -217,21 +217,6 @@ class MemoryTools:
             # Compute content hash for deduplication
             content_hash = self._compute_hash(content)
 
-            # Check for existing memory with same hash in same namespace
-            existing = self._store.get_by_hash(content_hash)
-            if existing:
-                logger.info(f"Duplicate memory detected: {existing['ids'][0]}")
-                return {
-                    "success": True,
-                    "data": {
-                        "id": existing["ids"][0],
-                        "content_hash": content_hash,
-                        "namespace": namespace,
-                        "duplicate": True,
-                        "message": "Memory with same content already exists",
-                    },
-                }
-
             # Generate embedding via daemon (non-blocking)
             embed_result = self._daemon.embed([content])
 
@@ -249,28 +234,18 @@ class MemoryTools:
                     "error": "No embedding returned",
                 }
 
-            # Generate memory ID
-            memory_id = self._generate_memory_id(mem_type)
-
-            # Create Document for storage
-            # Store importance in metadata since Document doesn't have importance field
-            doc_metadata = metadata or {}
-            doc_metadata["importance"] = importance
-
-            doc = Document(
-                id=memory_id,
+            # Store memory using SQLiteStore's add_memory
+            # This stores in memories, memories_vec, and memories_fts tables
+            memory_id = self._store.add_memory(
                 content=content,
-                source_file=None,  # Memories don't have source files
-                chunk_index=0,
-                doc_hash=content_hash,
+                embedding=embeddings[0],
+                memory_type=mem_type.value,
                 namespace=namespace,
-                doc_type=mem_type.value,
                 confidence=0.3,  # Memories start at low confidence
-                metadata=doc_metadata,
+                importance=importance,
+                content_hash=content_hash,
+                tags=metadata,
             )
-
-            # Store with embedding
-            self._store.add_documents([doc], [embeddings[0]])
 
             logger.info(f"Stored memory {memory_id} in namespace {namespace}")
 
@@ -349,55 +324,49 @@ class MemoryTools:
                     "error": "No query embedding returned",
                 }
 
-            # Build where filter
-            where: dict[str, Any] = {}
-            if namespace:
-                where["namespace"] = namespace
-            if memory_type:
-                where["doc_type"] = memory_type
+            # Build where filter for post-search filtering
+            # SQLiteStore.search_hybrid doesn't support where filters directly
 
-            # Search ChromaDB
-            results = self._store.search(
-                query_embedding=query_embedding,
-                n_results=n_results,
-                where=where if where else None,
+            # Search using SQLiteStore's hybrid search (vector + FTS)
+            results = self._store.search_hybrid(
+                embedding=query_embedding,
+                query=query,
+                n_results=n_results * 2,  # Fetch extra for filtering
             )
 
-            # Filter by importance and confidence
-            filtered_results = []
-            for result in results:
-                doc = result.document
-                # Get importance from metadata
-                importance = 0.5
-                if doc.metadata and "importance" in doc.metadata:
-                    importance = doc.metadata["importance"]
-                if min_importance is not None and importance < min_importance:
-                    continue
-                if min_confidence is not None and doc.confidence < min_confidence:
-                    continue
-                filtered_results.append(result)
-
-            # Convert results to response format
+            # Filter results by namespace, memory_type, importance, and confidence
             memories_data = []
-            for i, result in enumerate(filtered_results):
-                doc = result.document
-                # Get importance from metadata
-                importance = 0.5
-                if doc.metadata and "importance" in doc.metadata:
-                    importance = doc.metadata["importance"]
+            for i, result in enumerate(results):
+                # Apply namespace filter
+                if namespace and result.namespace != namespace:
+                    continue
+                # Apply memory_type filter
+                if memory_type and result.memory_type != memory_type:
+                    continue
+                # Apply importance filter
+                if min_importance is not None and result.importance < min_importance:
+                    continue
+                # Apply confidence filter
+                if min_confidence is not None and result.confidence < min_confidence:
+                    continue
+
                 memories_data.append({
-                    "id": doc.id,
-                    "content": doc.content,
-                    "content_hash": doc.doc_hash,
-                    "type": doc.doc_type,
-                    "namespace": doc.namespace,
-                    "importance": importance,
-                    "confidence": doc.confidence,
-                    "similarity": result.similarity,
-                    "rank": i,
+                    "id": result.id,
+                    "content": result.content,
+                    "content_hash": None,  # Not returned by search_hybrid
+                    "type": result.memory_type,
+                    "namespace": result.namespace,
+                    "importance": result.importance,
+                    "confidence": result.confidence,
+                    "similarity": result.score,
+                    "rank": len(memories_data),
                 })
 
-            # Graph expansion if requested
+                # Stop once we have enough results
+                if len(memories_data) >= n_results:
+                    break
+
+            # Graph expansion if requested - uses SQLiteStore directly
             expanded_data = []
             if include_related and memories_data:
                 seen_ids = {m["id"] for m in memories_data}
@@ -406,20 +375,21 @@ class MemoryTools:
                 for depth in range(max_depth):
                     next_expand = []
                     for memory_id in to_expand:
-                        edges = self._hybrid.get_edges(memory_id, direction="both")
+                        # Use SQLiteStore's get_edges directly
+                        edges = self._store.get_edges(memory_id, direction="both")
                         for edge in edges:
                             # Get the connected memory ID
                             connected_id = edge.get("target_id") if edge.get("source_id") == memory_id else edge.get("source_id")
                             if connected_id and connected_id not in seen_ids:
                                 seen_ids.add(connected_id)
                                 next_expand.append(connected_id)
-                                # Fetch the connected memory
-                                connected_mem = await self._hybrid.get_memory(connected_id)
+                                # Fetch the connected memory using SQLiteStore
+                                connected_mem = self._store.get_memory(connected_id)
                                 if connected_mem:
                                     expanded_data.append({
                                         "id": connected_id,
                                         "content": connected_mem.get("content", ""),
-                                        "type": connected_mem.get("doc_type", "memory"),
+                                        "type": connected_mem.get("memory_type", "memory"),
                                         "namespace": connected_mem.get("namespace", ""),
                                         "importance": connected_mem.get("importance", 0.5),
                                         "confidence": connected_mem.get("confidence", 0.5),
@@ -562,21 +532,20 @@ class MemoryTools:
             protected_ids: list[str] = []
 
             if memory_id:
-                # Direct deletion by ID
-                existing = self._store.get(ids=[memory_id])
-                if not existing["ids"]:
+                # Direct deletion by ID using SQLiteStore.get_memory
+                existing = self._store.get_memory(memory_id)
+                if not existing:
                     return {
                         "success": False,
                         "error": f"Memory not found: {memory_id}",
                     }
 
                 # Check golden rule protection
-                metadata = existing["metadatas"][0] if existing["metadatas"] else {}
-                confidence = metadata.get("confidence", 0.0)
-                doc_type = metadata.get("doc_type", "")
+                confidence = existing.get("confidence", 0.0)
+                mem_type = existing.get("memory_type", "")
 
                 is_protected = (
-                    confidence >= 0.9 or doc_type == "golden_rule"
+                    confidence >= 0.9 or mem_type == "golden_rule"
                 )
 
                 if is_protected and not force:
@@ -587,8 +556,8 @@ class MemoryTools:
                         "data": {"protected_ids": [memory_id]},
                     }
 
-                # Delete the memory
-                self._store.delete_by_id([memory_id])
+                # Delete the memory using SQLiteStore.delete_memory
+                self._store.delete_memory(memory_id)
                 deleted_ids.append(memory_id)
 
             else:
@@ -612,35 +581,37 @@ class MemoryTools:
                         "error": "No query embedding returned",
                     }
 
-                # Build where filter
-                where: dict[str, Any] = {}
-                if namespace:
-                    where["namespace"] = namespace
-
-                # Search for memories to delete
-                results = self._store.search(
-                    query_embedding=query_embedding,
-                    n_results=n_results,
-                    where=where if where else None,
+                # Search for memories to delete using SQLiteStore.search_hybrid
+                results = self._store.search_hybrid(
+                    embedding=query_embedding,
+                    query=query,
+                    n_results=n_results * 2,  # Fetch extra for namespace filtering
                 )
 
-                # Check each result for golden rule protection
+                # Check each result for golden rule protection and namespace filter
                 ids_to_delete: list[str] = []
                 for result in results:
-                    doc = result.document
+                    # Apply namespace filter
+                    if namespace and result.namespace != namespace:
+                        continue
+
                     is_protected = (
-                        doc.confidence >= 0.9 or doc.doc_type == "golden_rule"
+                        result.confidence >= 0.9 or result.memory_type == "golden_rule"
                     )
 
                     if is_protected and not force:
-                        protected_ids.append(doc.id)
+                        protected_ids.append(result.id)
                     else:
-                        ids_to_delete.append(doc.id)
+                        ids_to_delete.append(result.id)
 
-                # Delete non-protected memories
-                if ids_to_delete:
-                    self._store.delete_by_id(ids_to_delete)
-                    deleted_ids.extend(ids_to_delete)
+                    # Stop once we have enough
+                    if len(ids_to_delete) + len(protected_ids) >= n_results:
+                        break
+
+                # Delete non-protected memories using SQLiteStore.delete_memory
+                for mem_id in ids_to_delete:
+                    self._store.delete_memory(mem_id)
+                    deleted_ids.append(mem_id)
 
             logger.info(f"Deleted {len(deleted_ids)} memories, {len(protected_ids)} protected")
 
@@ -702,22 +673,22 @@ class MemoryTools:
                 memories = result.get("data", {}).get("memories", [])
 
             else:
-                # Get recent memories by importance
-                where = {"namespace": namespace} if namespace else None
-                all_docs = self._store.get(where=where)
+                # Get memories using SQLiteStore.list_memories
+                all_docs = self._store.list_memories(
+                    namespace=namespace,
+                    limit=n_results * 2,  # Fetch extra for sorting
+                )
 
-                # Sort by importance (descending)
+                # Convert to expected format and sort by importance (descending)
                 memories_data = []
-                for i, doc_id in enumerate(all_docs["ids"]):
-                    metadata = all_docs["metadatas"][i] if all_docs["metadatas"] else {}
-                    content = all_docs["documents"][i] if all_docs["documents"] else ""
+                for doc in all_docs:
                     memories_data.append({
-                        "id": doc_id,
-                        "content": content,
-                        "type": metadata.get("doc_type", "document"),
-                        "importance": metadata.get("importance", 0.5),
-                        "confidence": metadata.get("confidence", 0.3),
-                        "namespace": metadata.get("namespace", "default"),
+                        "id": doc["id"],
+                        "content": doc["content"],
+                        "type": doc["memory_type"],
+                        "importance": doc["importance"],
+                        "confidence": doc["confidence"],
+                        "namespace": doc["namespace"],
                     })
 
                 # Sort by importance and take top results
@@ -1312,21 +1283,11 @@ class MemoryTools:
             - error: Error message if operation failed
         """
         try:
-            if self._hybrid:
-                count = self._hybrid.count_memories(
-                    namespace=namespace,
-                    memory_type=memory_type,
-                )
-            else:
-                # Fallback to ChromaStore
-                where: Optional[dict[str, Any]] = None
-                if namespace or memory_type:
-                    where = {}
-                    if namespace:
-                        where["namespace"] = namespace
-                    if memory_type:
-                        where["doc_type"] = memory_type
-                count = self._store.count(where=where)
+            # Use SQLiteStore.count_memories directly
+            count = self._store.count_memories(
+                namespace=namespace,
+                memory_type=memory_type,
+            )
 
             return {
                 "success": True,
@@ -1375,39 +1336,26 @@ class MemoryTools:
             # Clamp limit
             limit = min(limit, 1000)
 
-            if self._hybrid:
-                memories = self._hybrid.list_memories(
-                    namespace=namespace,
-                    memory_type=memory_type,
-                    limit=limit,
-                    offset=offset,
-                    order_by=order_by,
-                    descending=descending,
-                )
-            else:
-                # Fallback to ChromaStore
-                where: Optional[dict[str, Any]] = None
-                if namespace or memory_type:
-                    where = {}
-                    if namespace:
-                        where["namespace"] = namespace
-                    if memory_type:
-                        where["doc_type"] = memory_type
+            # Use SQLiteStore.list_memories directly
+            # Note: order_by and descending params not supported by SQLiteStore
+            result = self._store.list_memories(
+                namespace=namespace,
+                memory_type=memory_type,
+                limit=limit,
+                offset=offset,
+            )
 
-                result = self._store.get(where=where, limit=limit + offset)
-                memories = []
-                for i, doc_id in enumerate(result["ids"]):
-                    metadata = result["metadatas"][i] if result["metadatas"] else {}
-                    content = result["documents"][i] if result["documents"] else ""
-                    memories.append({
-                        "id": doc_id,
-                        "content": content,
-                        "type": metadata.get("doc_type", "document"),
-                        "namespace": metadata.get("namespace", "global"),
-                        "importance": metadata.get("importance", 0.5),
-                        "confidence": metadata.get("confidence", 0.3),
-                    })
-                memories = memories[offset:offset + limit]
+            # Convert to expected response format
+            memories = []
+            for doc in result:
+                memories.append({
+                    "id": doc["id"],
+                    "content": doc["content"],
+                    "type": doc["memory_type"],
+                    "namespace": doc["namespace"],
+                    "importance": doc["importance"],
+                    "confidence": doc["confidence"],
+                })
 
             return {
                 "success": True,

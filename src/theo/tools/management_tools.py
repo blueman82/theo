@@ -12,7 +12,7 @@ These tools provide administrative control over the stored documents.
 import logging
 from typing import Any, Optional
 
-from theo.storage import ChromaStore
+from theo.storage.sqlite_store import SQLiteStore
 
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
@@ -25,12 +25,12 @@ class ManagementTools:
     operations for managing the document/memory collection.
 
     Architectural justification:
-    - Thin wrapper around ChromaStore for MCP compatibility
+    - Thin wrapper around SQLiteStore for MCP compatibility
     - Consistent error handling and response format
     - Confirmation required for destructive operations
 
     Args:
-        store: ChromaDB storage instance
+        store: SQLiteStore instance for all storage operations
 
     Example:
         >>> tools = ManagementTools(store)
@@ -38,11 +38,11 @@ class ManagementTools:
         >>> print(f"Total documents: {result['data']['total_documents']}")
     """
 
-    def __init__(self, store: ChromaStore) -> None:
+    def __init__(self, store: SQLiteStore) -> None:
         """Initialize ManagementTools with storage dependency.
 
         Args:
-            store: ChromaDB storage instance
+            store: SQLiteStore instance for all storage operations
         """
         self._store = store
 
@@ -65,11 +65,14 @@ class ManagementTools:
                     "error": "No IDs provided for deletion",
                 }
 
-            # Verify IDs exist before deletion
-            existing = self._store.get(ids=ids)
-            existing_ids = set(existing["ids"]) if existing["ids"] else set()
-            requested_ids = set(ids)
+            # Verify IDs exist and delete using SQLiteStore
+            existing_ids = set()
+            for mem_id in ids:
+                mem = self._store.get_memory(mem_id)
+                if mem:
+                    existing_ids.add(mem_id)
 
+            requested_ids = set(ids)
             missing_ids = requested_ids - existing_ids
             found_ids = list(requested_ids & existing_ids)
 
@@ -79,8 +82,9 @@ class ManagementTools:
                     "error": f"No matching documents found. Missing IDs: {list(missing_ids)}",
                 }
 
-            # Delete found documents
-            self._store.delete_by_id(found_ids)
+            # Delete found documents using SQLiteStore.delete_memory
+            for mem_id in found_ids:
+                self._store.delete_memory(mem_id)
 
             logger.info(f"Deleted {len(found_ids)} documents by ID")
 
@@ -123,8 +127,9 @@ class ManagementTools:
                     "error": "No source_file provided",
                 }
 
-            # Check if any documents exist for this source file
-            existing = self._store.get_by_source_file(source_file)
+            # Find documents from this source file using SQLiteStore.list_memories
+            all_memories = self._store.list_memories(limit=10000)
+            existing = [m for m in all_memories if m.get("source_file") == source_file]
 
             if not existing:
                 return {
@@ -136,8 +141,10 @@ class ManagementTools:
                     },
                 }
 
-            # Delete documents by source file
-            deleted_count = self._store.delete_by_source(source_file)
+            # Delete documents by source file using SQLiteStore.delete_memory
+            for mem in existing:
+                self._store.delete_memory(mem["id"])
+            deleted_count = len(existing)
 
             logger.info(f"Deleted {deleted_count} documents from {source_file}")
 
@@ -177,8 +184,8 @@ class ManagementTools:
                     "error": "Confirmation required. Set confirm=True to delete all documents.",
                 }
 
-            # Get current count before deletion
-            count_before = self._store.count()
+            # Get current count before deletion using SQLiteStore.count_memories
+            count_before = self._store.count_memories()
 
             if count_before == 0:
                 return {
@@ -189,8 +196,11 @@ class ManagementTools:
                     },
                 }
 
-            # Clear the collection
-            deleted_count = self._store.clear()
+            # Clear the collection by listing and deleting all memories
+            all_memories = self._store.list_memories(limit=100000)
+            for mem in all_memories:
+                self._store.delete_memory(mem["id"])
+            deleted_count = len(all_memories)
 
             logger.info(f"Cleared collection: deleted {deleted_count} documents")
 
@@ -218,16 +228,30 @@ class ManagementTools:
             - error: Error message if operation failed
         """
         try:
-            stats = self._store.get_stats()
+            # Get basic counts using SQLiteStore methods
+            total_documents = self._store.count_memories()
+            edge_count = self._store.count_edges()
+
+            # Get unique namespaces and memory types from list_memories
+            all_memories = self._store.list_memories(limit=10000)
+            namespaces = list(set(m["namespace"] for m in all_memories if m.get("namespace")))
+            memory_types = {}
+            source_files = set()
+            for m in all_memories:
+                mem_type = m.get("memory_type", "document")
+                memory_types[mem_type] = memory_types.get(mem_type, 0) + 1
+                if m.get("source_file"):
+                    source_files.add(m["source_file"])
 
             return {
                 "success": True,
                 "data": {
-                    "total_documents": stats.total_documents,
-                    "unique_sources": stats.unique_sources,
-                    "source_files": stats.source_files,
-                    "namespaces": stats.namespaces,
-                    "doc_types": stats.doc_types,
+                    "total_documents": total_documents,
+                    "unique_sources": len(source_files),
+                    "source_files": list(source_files),
+                    "namespaces": namespaces,
+                    "doc_types": memory_types,
+                    "edge_count": edge_count,
                 },
             }
 
@@ -251,12 +275,8 @@ class ManagementTools:
             - error: Error message if operation failed
         """
         try:
-            if namespace:
-                # Get count for specific namespace
-                results = self._store.get(where={"namespace": namespace})
-                count = len(results["ids"]) if results["ids"] else 0
-            else:
-                count = self._store.count()
+            # Use SQLiteStore.count_memories with optional namespace filter
+            count = self._store.count_memories(namespace=namespace)
 
             return {
                 "success": True,
