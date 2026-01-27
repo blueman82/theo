@@ -282,7 +282,7 @@ class TestQueryTools:
             similarity=0.9,
             rank=0,
         )
-        mock_store.search.return_value = [mock_result]
+        mock_store.search_vector.return_value = [mock_result]
 
         tools = QueryTools(
             daemon_client=mock_daemon_client,
