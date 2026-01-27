@@ -453,7 +453,7 @@ async def run_opus_analysis(issues_file: str) -> None:
         try:
             await _perform_opus_analysis(store, settings, issues, payload)
         finally:
-            await store.close()
+            store.close()
 
     except Exception as e:
         log(f"daemon: error - {e}")
