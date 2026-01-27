@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "theo": {
+      "command": "uv",
+      "args": ["run", "python", "-m", "theo"],
+      "cwd": "/path/to/theo",
+      "env": {
+        "THEO_EMBEDDING_BACKEND": "mlx",
+        "THEO_DB_PATH": "~/.theo/chroma_db",
+        "THEO_LOG_LEVEL": "INFO"
+      }
+    }
+  },
+  "hooks": {
+    "PrePromptSubmit": [
+      {
+        "type": "command",
+        "command": "python /path/to/theo/hooks/theo-daemon.py --ensure-running"
+      }
+    ],
+    "Stop": [
+      {
+        "type": "command",
+        "command": "python /path/to/theo/hooks/theo-stop.py"
+      }
+    ]
+  }
+}
