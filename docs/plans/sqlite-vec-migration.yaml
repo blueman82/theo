@@ -3,7 +3,6 @@
 # VALIDATION: All consumers depend_on producers ✓
 
 conductor:
-  default_agent: python-pro
   worktree_groups:
     - group_id: "foundation"
       tasks: [1, 2, 3]
@@ -139,13 +138,12 @@ plan:
 
       success_criteria:
         - "sqlite-vec extension loaded via sqlite_vec.load(conn)"
-        - "memories table created with exact schema from plan"
+        - "memories table created with columns: id, content, content_hash, memory_type, namespace, confidence, importance, source_file, chunk_index, start_line, end_line, created_at, last_accessed, access_count, tags"
         - "memories_vec virtual table created with FLOAT[1024] (MLX dimension)"
-        - "memories_fts FTS5 virtual table created"
-        - "embedding_cache table created"
-        - "All 6 indexes created for memories table"
+        - "memories_fts FTS5 virtual table created with content indexed, id/memory_type/namespace/source_file UNINDEXED"
+        - "embedding_cache table created with columns: content_hash, provider, model, embedding, dims, created_at"
+        - "Indexes created: idx_memories_type, idx_memories_namespace, idx_memories_confidence, idx_memories_source_file, idx_memories_hash, idx_embedding_cache_hash"
         - "Schema version incremented to 2"
-        - "Uses UPSERT pattern (INSERT OR REPLACE) not separate add/update"
         - "No TODO comments, no placeholder code"
 
       test_commands:
