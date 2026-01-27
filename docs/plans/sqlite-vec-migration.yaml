@@ -1421,7 +1421,7 @@ plan:
       agent: "python-pro"
       files:
         - "pyproject.toml"
-      depends_on: [11, 13]
+      depends_on: [11, 12, 13]
       success_criteria:
         - "chromadb>=0.4.0 removed from [project].dependencies"
         - "chromadb.* removed from [[tool.mypy.overrides]] module list"
