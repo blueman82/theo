@@ -592,7 +592,7 @@ class MemoryDocument(BaseModel):
         if self.end_line is not None:
             meta["end_line"] = self.end_line
 
-        # Flatten additional metadata (only primitive types for ChromaDB)
+        # Flatten additional metadata
         if self.metadata:
             for key, value in self.metadata.items():
                 if isinstance(value, (str, int, float, bool)):
