@@ -386,7 +386,7 @@ class HybridStore:
         # so we provide just the counts for now
         return {
             "document_count": memory_count,
-            "sources": [],  # Not tracked in same way as ChromaDB
+            "sources": [],  # Source tracking not implemented
             "namespaces": namespaces,
             "edge_count": edge_count,
         }
