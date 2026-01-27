@@ -746,8 +746,20 @@ plan:
         approach: |
           Simple import cleanup.
         key_points:
-          - point: "Remove ChromaStore import"
-            details: "Delete the import line"
+          - point: "Remove ChromaStore import line"
+            details: "Delete from theo.storage.chroma_store import..."
+            reference: "src/theo/storage/__init__.py"
+          - point: "Remove ChromaStore from __all__"
+            details: "Delete 'ChromaStore' from __all__ list"
+            reference: "src/theo/storage/__init__.py"
+          - point: "Add StorageError = SQLiteStoreError alias"
+            details: "Backwards compatibility for code using StorageError"
+            reference: "src/theo/storage/__init__.py"
+          - point: "Update __all__ list"
+            details: "Export SQLiteStore, SQLiteStoreError, StorageError, HybridStore, Document, SearchResult"
+            reference: "src/theo/storage/__init__.py"
+          - point: "Update module docstring"
+            details: "Remove ChromaDB mention, describe sqlite-vec storage"
             reference: "src/theo/storage/__init__.py"
 
       code_quality:
