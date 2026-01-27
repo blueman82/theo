@@ -422,8 +422,9 @@ plan:
       success_criteria:
         - "chroma_path field removed from TheoSettings"
         - "collection_name field removed from TheoSettings"
-        - "THEO_DB_PATH env var removed or repurposed"
-        - "THEO_COLLECTION env var removed"
+        - "get_chroma_path() method removed if exists"
+        - "THEO_DB_PATH env var requirement removed"
+        - "THEO_COLLECTION env var requirement removed"
         - "sqlite_path remains as primary storage path"
         - "No TODO comments"
 
