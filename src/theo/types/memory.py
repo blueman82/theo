@@ -562,10 +562,9 @@ class MemoryDocument(BaseModel):
         )
 
     def to_storage_format(self) -> dict[str, Any]:
-        """Convert to ChromaStore-compatible format.
+        """Convert to storage-compatible format.
 
-        Returns a dictionary suitable for use with ChromaStore's add_documents()
-        method. Flattens metadata to ChromaDB-compatible primitive types.
+        Returns a dictionary suitable for SQLiteStore's add_memory() method.
 
         Returns:
             Dictionary with keys: id, content, and metadata dict
