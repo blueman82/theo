@@ -542,6 +542,8 @@ class TestDaemonServer:
 # =============================================================================
 
 
+@pytest.mark.timeout(60)
+@pytest.mark.xdist_group("daemon")
 class TestClientServerIntegration:
     """Test client and server working together."""
 
