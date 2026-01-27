@@ -22,9 +22,7 @@ class TheoSettings(BaseSettings):
     No defaults - all values must be explicitly set in .env file.
 
     Attributes:
-        sqlite_path: Path to SQLite database
-        chroma_path: Path to ChromaDB storage
-        collection_name: ChromaDB collection name
+        sqlite_path: Path to SQLite database (single source of truth for all storage)
         ollama_host: Ollama server host URL
         ollama_model: Embedding model name
         embedding_backend: Embedding backend ('ollama' or 'mlx')
@@ -42,8 +40,6 @@ class TheoSettings(BaseSettings):
 
     # Storage paths (required)
     sqlite_path: Path = Field(description="Path to SQLite database")
-    chroma_path: Path = Field(description="Path to ChromaDB storage")
-    collection_name: str = Field(description="ChromaDB collection name")
 
     # Ollama configuration (required)
     ollama_host: str = Field(description="Ollama server host URL")
@@ -80,10 +76,6 @@ class TheoSettings(BaseSettings):
     def get_sqlite_path(self) -> Path:
         """Get the SQLite path, expanding user home."""
         return self.sqlite_path.expanduser().resolve()
-
-    def get_chroma_path(self) -> Path:
-        """Get the ChromaDB path, expanding user home."""
-        return self.chroma_path.expanduser().resolve()
 
 
 # Alias for backward compatibility with code expecting RecallSettings
