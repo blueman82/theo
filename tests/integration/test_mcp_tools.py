@@ -377,10 +377,11 @@ class TestIndexingTools:
         )
 
         directory = sample_files["markdown"].parent
-        result = await index_directory(str(directory), recursive=False)
+        # Use async_mode=False for synchronous processing with expected keys
+        result = await index_directory(str(directory), recursive=False, async_mode=False)
 
         assert result["success"] is True
-        assert result["data"]["files_indexed"] >= 3
+        assert result["data"]["files_processed"] >= 3
         assert result["data"]["total_chunks"] > 0
 
 
@@ -890,10 +891,10 @@ class TestMCPToolWorkflows:
 
         directory = sample_files["markdown"].parent
 
-        # 1. Index directory
-        index_result = await index_directory(str(directory), recursive=False)
+        # 1. Index directory (use async_mode=False for synchronous processing)
+        index_result = await index_directory(str(directory), recursive=False, async_mode=False)
         assert index_result["success"] is True
-        assert index_result["data"]["files_indexed"] >= 3
+        assert index_result["data"]["files_processed"] >= 3
 
         # 2. Search
         search_result = await search("python function", n_results=5)
