@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from theo.constants import DEMOTION_FAILURE_THRESHOLD, GOLDEN_RULE_THRESHOLD
-from theo.storage import ChromaStore, StorageError
+from theo.storage import SQLiteStore, SQLiteStoreError
 
 logger = logging.getLogger(__name__)
 
@@ -86,14 +86,14 @@ class GoldenRules:
     - Tracking golden rule statistics
 
     Golden rules are identified by:
-    - doc_type == 'golden_rule', OR
+    - memory_type == 'golden_rule', OR
     - confidence >= 0.9
 
     Args:
-        store: ChromaStore instance for persistence
+        store: SQLiteStore instance for persistence
 
     Example:
-        >>> store = ChromaStore(ephemeral=True)
+        >>> store = SQLiteStore()
         >>> rules = GoldenRules(store)
         >>> # Get all golden rules
         >>> all_rules = rules.get_all()
@@ -103,11 +103,11 @@ class GoldenRules:
         >>> result = await rules.demote("doc_123", reason="Contradicted by user")
     """
 
-    def __init__(self, store: ChromaStore):
+    def __init__(self, store: SQLiteStore):
         """Initialize GoldenRules manager.
 
         Args:
-            store: ChromaStore instance for persistence
+            store: SQLiteStore instance for persistence
         """
         self._store = store
         # In-memory tracking of failure counts (could be persisted)
@@ -129,46 +129,39 @@ class GoldenRules:
         golden_rules: list[GoldenRule] = []
 
         try:
-            # Get by type
-            where_filter: dict[str, Any] = {"doc_type": "golden_rule"}
-            if namespace:
-                where_filter["namespace"] = namespace
-
-            type_results = self._store.get(where=where_filter)
+            # Get golden rules by type
+            type_memories = self._store.list_memories(
+                namespace=namespace,
+                memory_type="golden_rule",
+                limit=10000,
+            )
 
             seen_ids: set[str] = set()
 
             # Process type-based golden rules
-            for i, doc_id in enumerate(type_results["ids"]):
+            for memory in type_memories:
+                doc_id = memory["id"]
                 seen_ids.add(doc_id)
-                content = type_results["documents"][i] if type_results["documents"] else ""
-                metadata = type_results["metadatas"][i] if type_results["metadatas"] else {}
-
-                golden_rules.append(self._to_golden_rule(doc_id, content, metadata))
+                content = memory.get("content", "")
+                golden_rules.append(self._to_golden_rule(doc_id, content, memory))
 
             # Also get high-confidence documents
-            # Note: ChromaDB doesn't support >= in where filters well,
-            # so we fetch all and filter
-            all_filter: dict[str, Any] = {}
-            if namespace:
-                all_filter["namespace"] = namespace
+            all_memories = self._store.list_memories(namespace=namespace, limit=10000)
 
-            all_results = self._store.get(where=all_filter if all_filter else None)
-
-            for i, doc_id in enumerate(all_results["ids"]):
+            for memory in all_memories:
+                doc_id = memory["id"]
                 if doc_id in seen_ids:
                     continue
 
-                metadata = all_results["metadatas"][i] if all_results["metadatas"] else {}
-                confidence = metadata.get("confidence", 0.3)
+                confidence = memory.get("confidence", 0.3)
 
                 if confidence >= GOLDEN_RULE_THRESHOLD:
-                    content = all_results["documents"][i] if all_results["documents"] else ""
-                    golden_rules.append(self._to_golden_rule(doc_id, content, metadata))
+                    content = memory.get("content", "")
+                    golden_rules.append(self._to_golden_rule(doc_id, content, memory))
 
             return golden_rules
 
-        except StorageError as e:
+        except SQLiteStoreError as e:
             logger.error(f"Error getting golden rules: {e}")
             return []
 
@@ -186,6 +179,10 @@ class GoldenRules:
     def is_golden_rule(self, doc_id: str) -> bool:
         """Check if a document is a golden rule.
 
+        A document is a golden rule if:
+        - confidence >= 0.9 OR
+        - memory_type == 'golden_rule'
+
         Args:
             doc_id: Document ID to check
 
@@ -193,18 +190,17 @@ class GoldenRules:
             True if document is a golden rule
         """
         try:
-            result = self._store.get(ids=[doc_id])
+            memory = self._store.get_memory(doc_id)
 
-            if not result["ids"]:
+            if memory is None:
                 return False
 
-            metadata = result["metadatas"][0] if result["metadatas"] else {}
-            doc_type = metadata.get("doc_type", "document")
-            confidence = metadata.get("confidence", 0.3)
+            memory_type = memory.get("memory_type", "document")
+            confidence = memory.get("confidence", 0.3)
 
-            return doc_type == "golden_rule" or confidence >= GOLDEN_RULE_THRESHOLD
+            return memory_type == "golden_rule" or confidence >= GOLDEN_RULE_THRESHOLD
 
-        except StorageError:
+        except SQLiteStoreError:
             return False
 
     def record_failure(self, doc_id: str) -> int:
@@ -264,21 +260,20 @@ class GoldenRules:
         """
         try:
             # Verify document exists and is a golden rule
-            result = self._store.get(ids=[doc_id])
+            memory = self._store.get_memory(doc_id)
 
-            if not result["ids"]:
+            if memory is None:
                 return DemotionResult(
                     success=False,
                     doc_id=doc_id,
                     error=f"Document '{doc_id}' not found",
                 )
 
-            metadata = result["metadatas"][0] if result["metadatas"] else {}
-            doc_type = metadata.get("doc_type", "document")
-            confidence = metadata.get("confidence", 0.3)
+            memory_type = memory.get("memory_type", "document")
+            confidence = memory.get("confidence", 0.3)
 
             # Check if actually a golden rule
-            if doc_type != "golden_rule" and confidence < GOLDEN_RULE_THRESHOLD:
+            if memory_type != "golden_rule" and confidence < GOLDEN_RULE_THRESHOLD:
                 return DemotionResult(
                     success=True,
                     doc_id=doc_id,
@@ -286,11 +281,12 @@ class GoldenRules:
                     reason="Document is not a golden rule",
                 )
 
-            # Get original type if stored in metadata
-            original_type = metadata.get("meta_promoted_from", "document")
+            # Get original type if stored in tags/metadata
+            tags = memory.get("tags") or {}
+            original_type = tags.get("promoted_from", "document")
 
-            # Update confidence (demotion)
-            updated = self._store.update_confidence(doc_id, new_confidence)
+            # Update confidence (demotion) using SQLiteStore.update_memory()
+            updated = self._store.update_memory(doc_id, confidence=new_confidence)
 
             if not updated:
                 return DemotionResult(
@@ -316,7 +312,7 @@ class GoldenRules:
                 reason=reason,
             )
 
-        except StorageError as e:
+        except SQLiteStoreError as e:
             logger.error(f"Storage error demoting {doc_id}: {e}")
             return DemotionResult(
                 success=False,
@@ -372,33 +368,38 @@ class GoldenRules:
         self,
         doc_id: str,
         content: str,
-        metadata: dict[str, Any],
+        memory: dict[str, Any],
     ) -> GoldenRule:
         """Convert storage data to GoldenRule object.
 
         Args:
             doc_id: Document ID
             content: Document content
-            metadata: Metadata dictionary
+            memory: Memory dictionary from SQLiteStore
 
         Returns:
             GoldenRule instance
         """
-        # Parse promoted_at timestamp
+        # Parse promoted_at timestamp from created_at (Unix timestamp)
         promoted_at = datetime.now()
-        if created_str := metadata.get("created_at"):
+        created_at = memory.get("created_at")
+        if created_at is not None:
             try:
-                promoted_at = datetime.fromisoformat(created_str)
-            except (ValueError, TypeError):
+                promoted_at = datetime.fromtimestamp(created_at)
+            except (ValueError, TypeError, OSError):
                 pass
+
+        # Get original type from tags if available
+        tags = memory.get("tags") or {}
+        original_type = tags.get("promoted_from", memory.get("memory_type", "document"))
 
         return GoldenRule(
             doc_id=doc_id,
             content=content,
-            original_type=metadata.get("meta_promoted_from", metadata.get("doc_type", "document")),
+            original_type=original_type,
             promoted_at=promoted_at,
-            confidence=metadata.get("confidence", GOLDEN_RULE_THRESHOLD),
-            validation_count=metadata.get("access_count", 0),
+            confidence=memory.get("confidence", GOLDEN_RULE_THRESHOLD),
+            validation_count=memory.get("access_count", 0),
             failure_count=self._failure_counts.get(doc_id, 0),
-            metadata=metadata,
+            metadata=memory,
         )

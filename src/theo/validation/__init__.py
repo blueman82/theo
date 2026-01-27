@@ -17,8 +17,8 @@ Key components:
 
 Example:
     >>> from theo.validation import ValidationLoop, FeedbackCollector
-    >>> from theo.storage import ChromaStore
-    >>> store = ChromaStore(ephemeral=True)
+    >>> from theo.storage import SQLiteStore
+    >>> store = SQLiteStore()
     >>> loop = ValidationLoop(store)
     >>> # Record positive usage
     >>> result = await loop.record_usage("doc_123", was_helpful=True)

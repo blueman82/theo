@@ -15,7 +15,6 @@ Documents with confidence < 0.15 are candidates for removal.
 import logging
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any, Optional
 
 from theo.constants import (
@@ -25,7 +24,7 @@ from theo.constants import (
     LOW_CONFIDENCE_THRESHOLD,
     SUCCESS_ADJUSTMENT,
 )
-from theo.storage import ChromaStore, StorageError
+from theo.storage import SQLiteStore, SQLiteStoreError
 from theo.types import MemoryType
 
 logger = logging.getLogger(__name__)
@@ -109,12 +108,12 @@ class ValidationLoop:
     - Low confidence threshold: 0.15 (candidates for deletion)
 
     Args:
-        store: ChromaStore instance for persistence
+        store: SQLiteStore instance for persistence
         success_adjustment: Confidence increase on success (default: 0.1)
         failure_multiplier: Multiplier for failure penalty (default: 1.5)
 
     Example:
-        >>> store = ChromaStore(ephemeral=True)
+        >>> store = SQLiteStore()
         >>> loop = ValidationLoop(store)
         >>> # Record helpful usage
         >>> result = await loop.record_usage("doc_123", was_helpful=True)
@@ -123,14 +122,14 @@ class ValidationLoop:
 
     def __init__(
         self,
-        store: ChromaStore,
+        store: SQLiteStore,
         success_adjustment: float = SUCCESS_ADJUSTMENT,
         failure_multiplier: float = FAILURE_MULTIPLIER,
     ):
         """Initialize ValidationLoop with storage backend.
 
         Args:
-            store: ChromaStore instance for persistence
+            store: SQLiteStore instance for persistence
             success_adjustment: Base confidence adjustment on success
             failure_multiplier: Multiplier applied to adjustment on failure
         """
@@ -161,19 +160,19 @@ class ValidationLoop:
         Returns:
             UsageResult with old/new confidence and promotion status
         """
+        _ = context  # Reserved for future use
         try:
-            # Get current document state
-            result = self._store.get(ids=[doc_id])
+            # Get current document state using SQLiteStore.get_memory()
+            memory = self._store.get_memory(doc_id)
 
-            if not result["ids"]:
+            if memory is None:
                 return UsageResult(
                     success=False,
                     doc_id=doc_id,
                     error=f"Document '{doc_id}' not found",
                 )
 
-            metadata = result["metadatas"][0] if result["metadatas"] else {}
-            old_confidence = metadata.get("confidence", INITIAL_CONFIDENCE)
+            old_confidence = memory.get("confidence", INITIAL_CONFIDENCE)
 
             # Calculate new confidence
             if was_helpful:
@@ -183,8 +182,8 @@ class ValidationLoop:
                 penalty = self._success_adjustment * self._failure_multiplier
                 new_confidence = max(0.0, old_confidence - penalty)
 
-            # Update confidence in storage
-            updated = self._store.update_confidence(doc_id, new_confidence)
+            # Update confidence in storage using SQLiteStore.update_memory()
+            updated = self._store.update_memory(doc_id, confidence=new_confidence)
 
             if not updated:
                 return UsageResult(
@@ -197,9 +196,9 @@ class ValidationLoop:
             # Check for golden rule promotion
             promoted = False
             if was_helpful and new_confidence >= GOLDEN_RULE_THRESHOLD:
-                # Update metadata with new confidence for promotion check
-                updated_metadata = {**metadata, "confidence": new_confidence}
-                promotion_result = await self._check_promotion(doc_id, updated_metadata)
+                # Update memory dict with new confidence for promotion check
+                updated_memory = {**memory, "confidence": new_confidence}
+                promotion_result = await self._check_promotion(doc_id, updated_memory)
                 promoted = promotion_result.promoted
 
             logger.info(
@@ -217,7 +216,7 @@ class ValidationLoop:
                 promoted=promoted,
             )
 
-        except StorageError as e:
+        except SQLiteStoreError as e:
             logger.error(f"Storage error recording usage for {doc_id}: {e}")
             return UsageResult(
                 success=False,
@@ -258,44 +257,35 @@ class ValidationLoop:
             decayed_ids: list[str] = []
             skipped_golden = 0
 
-            # Get all documents (potentially filtered by namespace)
-            where_filter = {"namespace": namespace} if namespace else None
-            all_docs = self._store.get(where=where_filter)
+            # Get all documents using SQLiteStore.list_memories()
+            all_memories = self._store.list_memories(namespace=namespace, limit=10000)
 
-            if not all_docs["ids"]:
+            if not all_memories:
                 return DecayResult(success=True, decayed_count=0)
 
             # Calculate threshold timestamp
             threshold_time = time.time() - (days_threshold * 24 * 60 * 60)
 
-            for i, doc_id in enumerate(all_docs["ids"]):
-                metadata = all_docs["metadatas"][i] if all_docs["metadatas"] else {}
+            for memory in all_memories:
+                doc_id = memory["id"]
 
                 # Skip golden rules
-                confidence = metadata.get("confidence", INITIAL_CONFIDENCE)
-                doc_type = metadata.get("doc_type", "document")
+                confidence = memory.get("confidence", INITIAL_CONFIDENCE)
+                memory_type = memory.get("memory_type", "document")
 
-                if confidence >= GOLDEN_RULE_THRESHOLD or doc_type == "golden_rule":
+                if confidence >= GOLDEN_RULE_THRESHOLD or memory_type == "golden_rule":
                     skipped_golden += 1
                     continue
 
-                # Check if document is stale
-                accessed_at_str = metadata.get("accessed_at")
-                if accessed_at_str:
-                    try:
-                        accessed_at = datetime.fromisoformat(accessed_at_str)
-                        accessed_timestamp = accessed_at.timestamp()
-                    except (ValueError, TypeError):
-                        accessed_timestamp = time.time()
+                # Check if document is stale using last_accessed (Unix timestamp)
+                last_accessed = memory.get("last_accessed")
+                if last_accessed is not None:
+                    accessed_timestamp = last_accessed
                 else:
-                    # If no accessed_at, use created_at
-                    created_at_str = metadata.get("created_at")
-                    if created_at_str:
-                        try:
-                            created_at = datetime.fromisoformat(created_at_str)
-                            accessed_timestamp = created_at.timestamp()
-                        except (ValueError, TypeError):
-                            accessed_timestamp = time.time()
+                    # If no last_accessed, use created_at
+                    created_at = memory.get("created_at")
+                    if created_at is not None:
+                        accessed_timestamp = created_at
                     else:
                         accessed_timestamp = time.time()
 
@@ -307,7 +297,7 @@ class ValidationLoop:
                 new_confidence = max(min_confidence, confidence - decay_amount)
 
                 if new_confidence != confidence:
-                    updated = self._store.update_confidence(doc_id, new_confidence)
+                    updated = self._store.update_memory(doc_id, confidence=new_confidence)
                     if updated:
                         decayed_ids.append(doc_id)
                         logger.debug(
@@ -325,7 +315,7 @@ class ValidationLoop:
                 skipped_golden=skipped_golden,
             )
 
-        except StorageError as e:
+        except SQLiteStoreError as e:
             logger.error(f"Storage error during decay: {e}")
             return DecayResult(success=False, error=f"Storage error: {e}")
         except Exception as e:
@@ -342,21 +332,20 @@ class ValidationLoop:
             Confidence score (0.0-1.0) or None if document not found
         """
         try:
-            result = self._store.get(ids=[doc_id])
+            memory = self._store.get_memory(doc_id)
 
-            if not result["ids"]:
+            if memory is None:
                 return None
 
-            metadata = result["metadatas"][0] if result["metadatas"] else {}
-            return metadata.get("confidence", INITIAL_CONFIDENCE)
+            return memory.get("confidence", INITIAL_CONFIDENCE)
 
-        except StorageError:
+        except SQLiteStoreError:
             return None
 
     async def _check_promotion(
         self,
         doc_id: str,
-        metadata: dict[str, Any],
+        memory: dict[str, Any],
     ) -> PromotionResult:
         """Check if a document should be promoted to golden rule.
 
@@ -367,16 +356,16 @@ class ValidationLoop:
 
         Args:
             doc_id: Document ID to check
-            metadata: Current document metadata
+            memory: Current document memory dict
 
         Returns:
             PromotionResult indicating if promotion occurred
         """
-        confidence = metadata.get("confidence", INITIAL_CONFIDENCE)
-        doc_type = metadata.get("doc_type", "document")
+        confidence = memory.get("confidence", INITIAL_CONFIDENCE)
+        memory_type = memory.get("memory_type", "document")
 
         # Already a golden rule
-        if doc_type == "golden_rule":
+        if memory_type == "golden_rule":
             return PromotionResult(
                 success=True,
                 doc_id=doc_id,
@@ -395,21 +384,20 @@ class ValidationLoop:
 
         # Check if type is promotable
         promotable_types = {"preference", "decision", "pattern"}
-        if doc_type not in promotable_types:
+        if memory_type not in promotable_types:
             return PromotionResult(
                 success=True,
                 doc_id=doc_id,
                 promoted=False,
-                reason=f"Type '{doc_type}' is not promotable",
+                reason=f"Type '{memory_type}' is not promotable",
             )
 
         # Promote to golden rule
-        # Note: ChromaStore.update_confidence only updates confidence field
-        # For full type change, we would need a more comprehensive update method
+        # Note: SQLiteStore.update_memory() can update memory_type if needed
         # For now, we just note the promotion eligibility
         logger.info(
             f"Document {doc_id} eligible for golden rule promotion "
-            f"(confidence={confidence:.2f}, type={doc_type})"
+            f"(confidence={confidence:.2f}, type={memory_type})"
         )
 
         return PromotionResult(
@@ -417,7 +405,7 @@ class ValidationLoop:
             doc_id=doc_id,
             promoted=True,
             new_type=MemoryType.GOLDEN_RULE,
-            reason=f"Promoted from {doc_type} (confidence={confidence:.2f})",
+            reason=f"Promoted from {memory_type} (confidence={confidence:.2f})",
         )
 
     def get_low_confidence_candidates(
@@ -438,18 +426,16 @@ class ValidationLoop:
             List of document IDs below the threshold
         """
         try:
-            where_filter = {"namespace": namespace} if namespace else None
-            all_docs = self._store.get(where=where_filter)
+            all_memories = self._store.list_memories(namespace=namespace, limit=10000)
 
             candidates = []
-            for i, doc_id in enumerate(all_docs["ids"]):
-                metadata = all_docs["metadatas"][i] if all_docs["metadatas"] else {}
-                confidence = metadata.get("confidence", INITIAL_CONFIDENCE)
+            for memory in all_memories:
+                confidence = memory.get("confidence", INITIAL_CONFIDENCE)
 
                 if confidence < threshold:
-                    candidates.append(doc_id)
+                    candidates.append(memory["id"])
 
             return candidates
 
-        except StorageError:
+        except SQLiteStoreError:
             return []
