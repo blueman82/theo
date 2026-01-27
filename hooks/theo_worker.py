@@ -366,7 +366,7 @@ async def embed_worker(
                 queue.update_embedding(memory_id, embedding)
                 to_store.append((memory_id, entry, embedding))
 
-            # Store one at a time to avoid concurrency issues with ChromaDB
+            # Store one at a time to avoid concurrency issues with SQLite
             results = []
             for mid, ent, emb in to_store:
                 try:
