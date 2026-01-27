@@ -24,9 +24,9 @@ from theo.validation.feedback import (
 from theo.validation.golden_rules import (
     DEMOTION_FAILURE_THRESHOLD,
 )
-from theo.validation.loop import (
-    DEFAULT_FAILURE_MULTIPLIER,
-    DEFAULT_SUCCESS_ADJUSTMENT,
+from theo.constants import (
+    FAILURE_MULTIPLIER,
+    SUCCESS_ADJUSTMENT,
     LOW_CONFIDENCE_THRESHOLD,
 )
 
