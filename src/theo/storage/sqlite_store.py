@@ -173,7 +173,7 @@ class SQLiteStore:
         # Memory Storage Tables (sqlite-vec migration - schema v2)
         # =====================================================================
 
-        # Memory content and metadata (replaces ChromaDB)
+        # Memory content and metadata
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
