@@ -645,10 +645,11 @@ plan:
 
       success_criteria:
         - "ChromaStore removed from imports and __all__"
-        - "SQLiteStore remains primary export"
-        - "HybridStore remains exported"
-        - "Document, SearchResult, StoreStats exported"
-        - "StorageError aliased from SQLiteStoreError"
+        - "SQLiteStore, SQLiteStoreError exported"
+        - "HybridStore, HybridStoreError exported"
+        - "Document, SearchResult, HybridSearchResult, StoreStats exported"
+        - "StorageError = SQLiteStoreError alias added for backwards compatibility"
+        - "Module docstring updated to describe sqlite-vec instead of ChromaDB"
         - "No TODO comments"
 
       test_commands:
