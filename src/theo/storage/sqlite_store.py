@@ -74,8 +74,10 @@ class SQLiteStore:
             self._conn.execute("PRAGMA foreign_keys = ON")
             self._conn.row_factory = sqlite3.Row
 
-            # Load sqlite-vec extension for vector storage
+            # Enable extension loading and load sqlite-vec for vector storage
+            self._conn.enable_load_extension(True)
             sqlite_vec.load(self._conn)
+            self._conn.enable_load_extension(False)  # Disable for security
 
             # Initialize schema
             self._init_schema()
