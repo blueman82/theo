@@ -184,6 +184,54 @@ src/theo/tools/               # Update to use new storage
 | Recovery | Wipe & reindex | Automatic |
 | Single file | No | Yes |
 
+## Embedding Bottleneck Solution
+
+**Problem**: Embedding is slow (~30-100ms per text). Large index operations block MCP and timeout.
+
+**The daemon solved TWO problems:**
+1. Concurrent writes → sqlite-vec fixes this
+2. Non-blocking async operations → Still need job queue pattern
+
+**Solution: In-Process Job Queue**
+
+```python
+# MCP tool returns immediately with job_id
+@mcp.tool()
+async def index_directory(dir_path: str) -> dict:
+    job_id = str(uuid.uuid4())
+    chunks = await chunk_directory(dir_path)  # Fast
+    job_queue.put(Job(job_id, chunks))         # Queue
+    return {"job_id": job_id, "status": "queued"}  # Return fast
+
+# Background worker (asyncio.Task, same process)
+async def embed_worker():
+    while True:
+        job = await job_queue.get()
+        for batch in batched(job.chunks, 100):
+            embeddings = embed_batch(batch)      # MLX
+            await store_vectors(batch, embeddings)  # SQLite (safe!)
+        job.status = "complete"
+
+# Status check
+@mcp.tool()
+async def get_job_status(job_id: str) -> dict:
+    return {"status": jobs[job_id].status, "progress": jobs[job_id].progress}
+```
+
+**Why this works with sqlite-vec but not ChromaDB:**
+- SQLite handles concurrent writes from main thread + background task safely
+- ChromaDB required separate daemon process, which caused corruption
+
+**What we still need:**
+- Job queue (in-memory asyncio.Queue, or SQLite table for persistence)
+- Background worker (asyncio.Task)
+- `get_job_status` tool
+
+**What we can remove:**
+- Separate daemon process
+- Unix socket IPC protocol
+- Daemon lifecycle management (launchd, pid files)
+
 ## Conclusion
 
 The slight performance trade-off (~2x slower searches) is acceptable given:
@@ -191,3 +239,4 @@ The slight performance trade-off (~2x slower searches) is acceptable given:
 - Dramatically simpler architecture
 - Single process, single database file
 - Standard SQLite tooling for debugging/backup
+- In-process job queue replaces complex daemon IPC
