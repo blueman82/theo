@@ -715,9 +715,12 @@ plan:
       success_criteria:
         - "ChromaStore initialization removed from initialize_components()"
         - "SQLiteStore used for all memory/vector operations"
-        - "HybridStore init updated (no ChromaStore parameter)"
-        - "THEO_DB_PATH and THEO_COLLECTION env vars removed"
-        - "Tool instances receive SQLiteStore"
+        - "HybridStore creation updated to pass only SQLiteStore + embedder"
+        - "--db-path argument removed from parse_arguments()"
+        - "--collection argument removed from parse_arguments()"
+        - "_require_env('THEO_DB_PATH') removed"
+        - "_require_env('THEO_COLLECTION') removed"
+        - "Tool instances receive SQLiteStore where ChromaStore was used"
         - "No TODO comments"
 
       test_commands:
