@@ -1,11 +1,12 @@
-"""Hybrid storage layer coordinating ChromaDB and SQLite operations.
+"""Hybrid storage layer coordinating SQLite operations.
 
-This module provides a HybridStore that coordinates ChromaDB (vector storage,
-document content) and SQLite (relationship graph) operations.
+This module provides a HybridStore that wraps SQLiteStore, providing
+a high-level API for memory operations with automatic embedding generation.
 
 Key architecture:
-- ChromaDB is the source of truth for documents/memories (content + embeddings)
-- SQLite is only used for relationship edges between memories
+- SQLiteStore is the source of truth for documents/memories (content + embeddings + metadata)
+- Embeddings are generated via EmbeddingProvider and stored in sqlite-vec
+- Full-text search via FTS5, vector search via sqlite-vec
 
 Usage:
     >>> store = await HybridStore.create()
@@ -13,16 +14,14 @@ Usage:
     >>> results = await store.search("relevant query", n_results=5)
 """
 
+import hashlib
 import logging
 from pathlib import Path
 from typing import Any, Optional
 
 from theo.config import EmbeddingBackend, TheoSettings
 from theo.embedding import EmbeddingProvider, create_embedding_provider
-from theo.storage.chroma_store import ChromaStore
-from theo.storage.chroma_store import StorageError as ChromaStorageError
 from theo.storage.sqlite_store import SQLiteStore, SQLiteStoreError
-from theo.storage.types import Document
 
 logger = logging.getLogger(__name__)
 
@@ -33,14 +32,13 @@ class HybridStoreError(Exception):
 
 
 class HybridStore:
-    """Coordinated storage layer combining ChromaDB and SQLite.
+    """Storage layer wrapping SQLiteStore with automatic embedding generation.
 
-    ChromaDB is the source of truth for all document/memory content.
-    SQLite handles relationship edges for graph traversal.
+    SQLiteStore is the source of truth for all document/memory content,
+    embeddings, and relationship edges.
 
     Args:
-        chroma_store: ChromaStore instance for vector operations
-        sqlite_store: SQLiteStore instance for edge operations
+        sqlite_store: SQLiteStore instance for all storage operations
         embedding_client: EmbeddingProvider for generating embeddings
 
     Example:
@@ -51,18 +49,15 @@ class HybridStore:
 
     def __init__(
         self,
-        chroma_store: ChromaStore,
         sqlite_store: SQLiteStore,
         embedding_client: EmbeddingProvider,
     ):
-        """Initialize HybridStore with component stores.
+        """Initialize HybridStore with SQLiteStore and embedding provider.
 
         Args:
-            chroma_store: ChromaStore instance
             sqlite_store: SQLiteStore instance
             embedding_client: EmbeddingProvider instance
         """
-        self._chroma = chroma_store
         self._sqlite = sqlite_store
         self._embedding_client = embedding_client
 
@@ -70,14 +65,15 @@ class HybridStore:
     async def create(
         cls,
         sqlite_path: Optional[Path] = None,
-        chroma_path: Optional[Path] = None,
-        collection_name: str = "documents",
         ollama_host: str = "http://localhost:11434",
         ollama_model: str = "mxbai-embed-large",
-        ephemeral: bool = False,
         embedding_backend: EmbeddingBackend = "mlx",
         mlx_model: str = "mlx-community/mxbai-embed-large-v1",
         embedding_client: Optional[EmbeddingProvider] = None,
+        # Legacy parameters (ignored, kept for backward compatibility)
+        chroma_path: Optional[Path] = None,
+        collection_name: str = "documents",
+        ephemeral: bool = False,
     ) -> "HybridStore":
         """Create a HybridStore with new component instances.
 
@@ -86,15 +82,15 @@ class HybridStore:
 
         Args:
             sqlite_path: Path to SQLite database (default: ~/.theo/theo.db)
-            chroma_path: Path to ChromaDB storage (default: ~/.theo/chroma_db)
-            collection_name: ChromaDB collection name (default: "documents")
             ollama_host: Ollama server host (default: http://localhost:11434)
             ollama_model: Embedding model name (default: mxbai-embed-large)
-            ephemeral: Use in-memory storage for testing (default: False)
             embedding_backend: Embedding backend to use ('ollama' or 'mlx')
             mlx_model: MLX model identifier (used when embedding_backend='mlx')
             embedding_client: Optional existing EmbeddingProvider to reuse
                 (avoids creating duplicate Metal contexts on Apple Silicon)
+            chroma_path: DEPRECATED - ignored (ChromaDB removed)
+            collection_name: DEPRECATED - ignored (ChromaDB removed)
+            ephemeral: DEPRECATED - ignored (ChromaDB removed)
 
         Returns:
             Configured HybridStore instance
@@ -109,11 +105,7 @@ class HybridStore:
             sqlite_store = SQLiteStore(
                 db_path=sqlite_path or settings.get_sqlite_path()
             )
-            chroma_store = ChromaStore(
-                db_path=chroma_path or settings.get_chroma_path(),
-                collection_name=collection_name,
-                ephemeral=ephemeral,
-            )
+
             # Use provided embedding client or create new one
             if embedding_client is None:
                 embedding_client = create_embedding_provider(
@@ -124,19 +116,17 @@ class HybridStore:
                 )
 
             return cls(
-                chroma_store=chroma_store,
                 sqlite_store=sqlite_store,
                 embedding_client=embedding_client,
             )
 
-        except (SQLiteStoreError, ChromaStorageError) as e:
+        except SQLiteStoreError as e:
             raise HybridStoreError(f"Failed to create HybridStore: {e}") from e
 
     def close(self) -> None:
         """Close all underlying stores and clients."""
         self._embedding_client.close()
         self._sqlite.close()
-        # ChromaDB doesn't require explicit close
 
     async def __aenter__(self) -> "HybridStore":
         """Async context manager entry."""
@@ -162,7 +152,7 @@ class HybridStore:
         queue_id: Optional[int] = None,
         embedding: Optional[list[float]] = None,
     ) -> str:
-        """Add a new memory with embedding to ChromaDB.
+        """Add a new memory with embedding to SQLite.
 
         Args:
             content: The memory content text
@@ -171,7 +161,7 @@ class HybridStore:
             importance: Importance score from 0.0 to 1.0
             confidence: Confidence score from 0.0 to 1.0 (default: 0.3)
             metadata: Optional additional metadata as dict
-            memory_id: Optional custom ID (auto-generated if not provided)
+            memory_id: Optional custom ID (ignored - SQLiteStore generates UUIDs)
             queue_id: Optional queue entry ID (unused, for compatibility)
             embedding: Optional pre-computed embedding
 
@@ -187,29 +177,28 @@ class HybridStore:
                 embeddings = self._embedding_client.embed_texts([content])
                 embedding = embeddings[0] if embeddings else []
 
-            # Build document - store namespace in metadata for consistency with migrated data
-            doc_metadata = metadata.copy() if metadata else {}
-            doc_metadata["namespace"] = namespace
-            doc_metadata["importance"] = importance
+            # Compute content hash for deduplication
+            content_hash = hashlib.sha256(content.encode()).hexdigest()
 
-            doc = Document(
-                id=memory_id or "",  # ChromaStore will generate if empty
+            # Store in SQLite with all three tables (memories, memories_vec, memories_fts)
+            memory_id = self._sqlite.add_memory(
                 content=content,
-                source_file=None,  # Not used for memories
-                doc_type=memory_type,
+                embedding=embedding,
+                memory_type=memory_type,
+                namespace=namespace,
                 confidence=confidence,
-                metadata=doc_metadata,
+                importance=importance,
+                content_hash=content_hash,
+                tags=metadata,
             )
 
-            # Add to ChromaDB
-            ids = self._chroma.add_documents([doc], [embedding])
-            return ids[0] if ids else ""
+            return memory_id
 
         except Exception as e:
             raise HybridStoreError(f"Failed to add memory: {e}") from e
 
     async def get_memory(self, memory_id: str) -> Optional[dict[str, Any]]:
-        """Get a memory by ID from ChromaDB.
+        """Get a memory by ID from SQLite.
 
         Args:
             memory_id: The memory ID to retrieve
@@ -218,28 +207,23 @@ class HybridStore:
             Memory dict or None if not found
         """
         try:
-            result = self._chroma.get(ids=[memory_id])
-            if result and result["ids"]:
-                doc = Document.from_chroma_result(
-                    doc_id=result["ids"][0],
-                    content=result["documents"][0],
-                    metadata=result["metadatas"][0] if result["metadatas"] else {},
-                )
+            result = self._sqlite.get_memory(memory_id)
+            if result:
                 return {
-                    "id": doc.id,
-                    "content": doc.content,
-                    "type": doc.doc_type,
-                    "namespace": doc.metadata.get("namespace", "global") if doc.metadata else "global",
-                    "importance": doc.metadata.get("importance", 0.5) if doc.metadata else 0.5,
-                    "confidence": doc.confidence,
-                    "metadata": doc.metadata,
+                    "id": result["id"],
+                    "content": result["content"],
+                    "type": result["memory_type"],
+                    "namespace": result["namespace"],
+                    "importance": result["importance"],
+                    "confidence": result["confidence"],
+                    "metadata": result.get("tags"),
                 }
             return None
         except Exception as e:
             raise HybridStoreError(f"Failed to get memory: {e}") from e
 
     async def delete_memory(self, memory_id: str) -> bool:
-        """Delete a memory from ChromaDB.
+        """Delete a memory from SQLite.
 
         Args:
             memory_id: The memory ID to delete
@@ -248,8 +232,7 @@ class HybridStore:
             True if memory was deleted, False if not found
         """
         try:
-            self._chroma.delete([memory_id])
-            return True
+            return self._sqlite.delete_memory(memory_id)
         except Exception as e:
             logger.warning(f"Failed to delete memory {memory_id}: {e}")
             return False
@@ -265,7 +248,7 @@ class HybridStore:
         namespace: Optional[str] = None,
         memory_type: Optional[str] = None,
     ) -> list[dict[str, Any]]:
-        """Perform semantic search using ChromaDB.
+        """Perform semantic search using SQLite vector search.
 
         Args:
             query: Search query text
@@ -280,35 +263,34 @@ class HybridStore:
             # Generate query embedding
             query_embedding = self._embedding_client.embed_query(query)
 
-            # Build metadata filter
-            where: Optional[dict[str, Any]] = None
+            # Build filter
+            where: Optional[dict] = None
             if namespace or memory_type:
                 where = {}
                 if namespace:
                     where["namespace"] = namespace
                 if memory_type:
-                    where["doc_type"] = memory_type
+                    where["memory_type"] = memory_type
 
-            # Search ChromaDB
-            results = self._chroma.search(
-                query_embedding=query_embedding,
+            # Search using sqlite-vec
+            results = self._sqlite.search_vector(
+                embedding=query_embedding,
                 n_results=n_results,
                 where=where,
             )
 
-            # Convert to memory format
+            # Convert SearchResult dataclass to dict format
             memories = []
             for r in results:
-                doc = r.document
                 memories.append({
-                    "id": doc.id,
-                    "content": doc.content,
-                    "type": doc.doc_type,
-                    "namespace": doc.metadata.get("namespace", "global") if doc.metadata else "global",
-                    "importance": doc.metadata.get("importance", 0.5) if doc.metadata else 0.5,
-                    "confidence": doc.confidence,
-                    "similarity": r.similarity,
-                    "metadata": doc.metadata,
+                    "id": r.id,
+                    "content": r.content,
+                    "type": r.memory_type,
+                    "namespace": r.namespace,
+                    "importance": r.importance,
+                    "confidence": r.confidence,
+                    "similarity": r.score,
+                    "metadata": r.metadata,
                 })
 
             return memories
@@ -389,13 +371,17 @@ class HybridStore:
         Returns:
             Dict with document count, edge count, etc.
         """
-        chroma_stats = self._chroma.get_stats()
+        memory_count = self._sqlite.count_memories()
         edge_count = self._sqlite.count_edges()
 
+        # Get namespace breakdown
+        namespaces: list[str] = []
+        # Note: SQLiteStore doesn't have a distinct namespaces query,
+        # so we provide just the counts for now
         return {
-            "document_count": chroma_stats.total_documents,
-            "sources": chroma_stats.source_files,
-            "namespaces": chroma_stats.namespaces,
+            "document_count": memory_count,
+            "sources": [],  # Not tracked in same way as ChromaDB
+            "namespaces": namespaces,
             "edge_count": edge_count,
         }
 
@@ -469,40 +455,27 @@ class HybridStore:
             confidence: New confidence score (optional)
             importance: New importance score (optional)
             memory_type: New memory type (optional)
-            metadata: New metadata to merge (optional)
+            metadata: New metadata (optional - replaces existing tags)
 
         Returns:
             True if memory was updated, False if not found
         """
         try:
-            # Get existing memory
-            result = self._chroma.get(ids=[memory_id])
-            if not result or not result["ids"]:
+            # Build update fields
+            fields: dict[str, Any] = {}
+            if confidence is not None:
+                fields["confidence"] = confidence
+            if importance is not None:
+                fields["importance"] = importance
+            if memory_type is not None:
+                fields["memory_type"] = memory_type
+            if metadata is not None:
+                fields["tags"] = metadata
+
+            if not fields:
                 return False
 
-            # Get existing metadata
-            existing_meta = result["metadatas"][0] if result["metadatas"] else {}
-
-            # Update fields
-            if confidence is not None:
-                existing_meta["confidence"] = confidence
-            if importance is not None:
-                existing_meta["importance"] = importance
-            if memory_type is not None:
-                existing_meta["doc_type"] = memory_type
-            if metadata is not None:
-                existing_meta.update(metadata)
-
-            # Update accessed_at timestamp
-            import time
-            existing_meta["accessed_at"] = time.time()
-
-            # Update in ChromaDB
-            self._chroma.update(
-                ids=[memory_id],
-                metadatas=[existing_meta],
-            )
-            return True
+            return self._sqlite.update_memory(memory_id, **fields)
 
         except Exception as e:
             raise HybridStoreError(f"Failed to update memory: {e}") from e
@@ -521,15 +494,10 @@ class HybridStore:
         Returns:
             Number of matching memories
         """
-        where: Optional[dict[str, Any]] = None
-        if namespace or memory_type:
-            where = {}
-            if namespace:
-                where["namespace"] = namespace
-            if memory_type:
-                where["doc_type"] = memory_type
-
-        return self._chroma.count(where=where)
+        return self._sqlite.count_memories(
+            namespace=namespace,
+            memory_type=memory_type,
+        )
 
     def list_memories(
         self,
@@ -547,53 +515,34 @@ class HybridStore:
             memory_type: Filter by type (optional)
             limit: Maximum number of results
             offset: Number of results to skip
-            order_by: Field to sort by
-            descending: Sort in descending order
+            order_by: Field to sort by (unused - SQLiteStore returns by created_at DESC)
+            descending: Sort in descending order (unused)
 
         Returns:
             List of memory dicts
         """
-        where: Optional[dict[str, Any]] = None
-        if namespace or memory_type:
-            where = {}
-            if namespace:
-                where["namespace"] = namespace
-            if memory_type:
-                where["doc_type"] = memory_type
+        results = self._sqlite.list_memories(
+            namespace=namespace,
+            memory_type=memory_type,
+            limit=limit,
+            offset=offset,
+        )
 
-        # Get all matching memories
-        result = self._chroma.get(where=where, limit=limit + offset)
-
-        if not result or not result["ids"]:
-            return []
-
-        # Convert to memory dicts
+        # Convert to HybridStore format
         memories = []
-        for i, doc_id in enumerate(result["ids"]):
-            metadata = result["metadatas"][i] if result["metadatas"] else {}
-            content = result["documents"][i] if result["documents"] else ""
+        for r in results:
             memories.append({
-                "id": doc_id,
-                "content": content,
-                "type": metadata.get("doc_type", "document"),
-                "namespace": metadata.get("namespace", "global"),
-                "importance": metadata.get("importance", 0.5),
-                "confidence": metadata.get("confidence", 0.3),
-                "created_at": metadata.get("created_at"),
-                "accessed_at": metadata.get("accessed_at"),
+                "id": r["id"],
+                "content": r["content"],
+                "type": r["memory_type"],
+                "namespace": r["namespace"],
+                "importance": r["importance"],
+                "confidence": r["confidence"],
+                "created_at": r.get("created_at"),
+                "accessed_at": r.get("last_accessed"),
             })
 
-        # Sort (ChromaDB doesn't support ordering)
-        if order_by in ("importance", "confidence"):
-            memories.sort(key=lambda x: x.get(order_by, 0), reverse=descending)
-        elif order_by in ("created_at", "accessed_at"):
-            memories.sort(
-                key=lambda x: x.get(order_by) or 0,
-                reverse=descending,
-            )
-
-        # Apply pagination
-        return memories[offset:offset + limit]
+        return memories
 
     def get_edges(
         self,
