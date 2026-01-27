@@ -1682,8 +1682,6 @@ OUTPUT:"""
             settings = RecallSettings()  # type: ignore[call-arg]  # Loads from env vars
             self.hybrid_store = await HybridStore.create(
                 sqlite_path=settings.get_sqlite_path(),
-                chroma_path=settings.get_sqlite_path(),
-                collection_name=settings.collection_name,
                 embedding_client=self.embedding_provider,  # Reuse existing provider (avoid duplicate Metal contexts)
             )
             self.logger.info("HybridStore created for direct writes")
