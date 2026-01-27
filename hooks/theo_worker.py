@@ -45,7 +45,7 @@ if TYPE_CHECKING:
     if _theo_dir.exists() and str(_theo_dir / "src") not in sys.path:
         sys.path.insert(0, str(_theo_dir / "src"))
     from theo.storage.hybrid import HybridStore
-    from theo.storage.chroma_store import ChromaStore
+    from theo.storage.sqlite_store import SQLiteStore
 
 # =============================================================================
 # Constants
