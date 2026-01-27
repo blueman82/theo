@@ -1,9 +1,11 @@
-"""SQLite storage layer for Theo relationship graphs.
+"""SQLite storage layer for Theo memory system.
 
-This module provides persistent storage for memory relationships (edges)
-that cannot be efficiently stored in ChromaDB. It enables graph expansion
-during memory recall - when searching for a memory, related memories can
-also be returned based on relationship type and weight.
+This module provides persistent storage for:
+- Memory content and metadata
+- Vector embeddings (sqlite-vec) for semantic search
+- Full-text search (FTS5) for keyword search
+- Relationship graphs (edges) for memory connections
+- Embedding cache for performance optimization
 
 Edge types:
 - relates_to: General relationship between memories
@@ -13,18 +15,38 @@ Edge types:
 
 Example:
     >>> store = SQLiteStore(Path("~/.theo/theo.db"))
-    >>> store.add_edge("mem1", "mem2", "supersedes", weight=1.0)
-    >>> related = store.get_related("mem1", max_depth=2)
+    >>> mem_id = store.add_memory("Python is great", embedding=[0.1]*1024)
+    >>> results = store.search_vector(embedding=[0.1]*1024, n_results=5)
 """
 
+import hashlib
 import json
 import logging
 import sqlite3
+import struct
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
+from uuid import uuid4
 
 import sqlite_vec
+
+
+@dataclass
+class SearchResult:
+    """Result from a search operation."""
+
+    id: str
+    content: str
+    score: float
+    memory_type: str
+    namespace: str
+    confidence: float
+    importance: float
+    source_file: str | None
+    chunk_index: int
+    metadata: dict | None = None
 
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
@@ -771,3 +793,714 @@ class SQLiteStore:
 
         except Exception as e:
             raise SQLiteStoreError(f"Failed to get edges: {e}") from e
+
+    # =========================================================================
+    # Memory CRUD Operations
+    # =========================================================================
+
+    def _serialize_embedding(self, embedding: list[float]) -> bytes:
+        """Serialize embedding to bytes for sqlite-vec storage."""
+        return struct.pack(f"{len(embedding)}f", *embedding)
+
+    def _deserialize_embedding(self, data: bytes) -> list[float]:
+        """Deserialize embedding from bytes."""
+        count = len(data) // 4  # 4 bytes per float
+        return list(struct.unpack(f"{count}f", data))
+
+    def add_memory(
+        self,
+        content: str,
+        embedding: list[float],
+        memory_type: str = "document",
+        namespace: str = "default",
+        confidence: float = 0.3,
+        importance: float = 0.5,
+        source_file: str | None = None,
+        chunk_index: int = 0,
+        content_hash: str | None = None,
+        tags: dict | None = None,
+    ) -> str:
+        """Add memory to all three tables in a single transaction.
+
+        Args:
+            content: Memory content text
+            embedding: Vector embedding (1024 dimensions for MLX)
+            memory_type: Type of memory (document, fact, procedure, etc.)
+            namespace: Namespace for organization
+            confidence: Initial confidence score (0.0-1.0)
+            importance: Importance score (0.0-1.0)
+            source_file: Optional source file path
+            chunk_index: Index of chunk within source file
+            content_hash: Optional pre-computed content hash
+            tags: Optional metadata dictionary
+
+        Returns:
+            Memory ID (uuid4 hex)
+
+        Raises:
+            SQLiteStoreError: If memory creation fails
+        """
+        memory_id = uuid4().hex
+        now = time.time()
+        content_hash = content_hash or hashlib.sha256(content.encode()).hexdigest()
+
+        try:
+            cursor = self._conn.cursor()
+
+            # Insert into memories table
+            cursor.execute(
+                """
+                INSERT INTO memories (
+                    id, content, content_hash, memory_type, namespace,
+                    confidence, importance, source_file, chunk_index,
+                    created_at, last_accessed, access_count, tags
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    content = excluded.content,
+                    content_hash = excluded.content_hash,
+                    memory_type = excluded.memory_type,
+                    namespace = excluded.namespace,
+                    confidence = excluded.confidence,
+                    importance = excluded.importance,
+                    source_file = excluded.source_file,
+                    chunk_index = excluded.chunk_index,
+                    tags = excluded.tags
+                """,
+                (
+                    memory_id,
+                    content,
+                    content_hash,
+                    memory_type,
+                    namespace,
+                    confidence,
+                    importance,
+                    source_file,
+                    chunk_index,
+                    now,
+                    now,
+                    0,
+                    json.dumps(tags) if tags else None,
+                ),
+            )
+
+            # Insert into memories_vec (sqlite-vec)
+            cursor.execute(
+                "INSERT INTO memories_vec (id, embedding) VALUES (?, ?)",
+                (memory_id, self._serialize_embedding(embedding)),
+            )
+
+            # Insert into memories_fts (FTS5)
+            cursor.execute(
+                """
+                INSERT INTO memories_fts (id, content, memory_type, namespace, source_file)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (memory_id, content, memory_type, namespace, source_file),
+            )
+
+            self._conn.commit()
+            return memory_id
+
+        except Exception as e:
+            self._conn.rollback()
+            raise SQLiteStoreError(f"Failed to add memory: {e}") from e
+
+    def get_memory(self, memory_id: str) -> dict | None:
+        """Get memory by ID with all metadata.
+
+        Args:
+            memory_id: Memory ID
+
+        Returns:
+            Memory dict or None if not found
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, content, content_hash, memory_type, namespace,
+                       confidence, importance, source_file, chunk_index,
+                       start_line, end_line, created_at, last_accessed,
+                       access_count, tags
+                FROM memories
+                WHERE id = ?
+                """,
+                (memory_id,),
+            )
+
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            return self._row_to_memory(row)
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to get memory: {e}") from e
+
+    def update_memory(self, memory_id: str, **fields) -> bool:
+        """Update memory fields.
+
+        Args:
+            memory_id: Memory ID
+            **fields: Fields to update (confidence, importance, content, etc.)
+
+        Returns:
+            True if updated, False if not found
+
+        Raises:
+            SQLiteStoreError: If update fails
+        """
+        if not fields:
+            return False
+
+        # Allowed fields to update
+        allowed_fields = {
+            "content",
+            "confidence",
+            "importance",
+            "memory_type",
+            "namespace",
+            "tags",
+            "last_accessed",
+            "access_count",
+        }
+
+        update_fields = {k: v for k, v in fields.items() if k in allowed_fields}
+        if not update_fields:
+            return False
+
+        # Handle special cases
+        if "tags" in update_fields and update_fields["tags"] is not None:
+            update_fields["tags"] = json.dumps(update_fields["tags"])
+
+        try:
+            cursor = self._conn.cursor()
+
+            # Build dynamic UPDATE query
+            set_clause = ", ".join(f"{k} = ?" for k in update_fields)
+            values = list(update_fields.values()) + [memory_id]
+
+            cursor.execute(
+                f"UPDATE memories SET {set_clause} WHERE id = ?",
+                values,
+            )
+
+            # If content was updated, also update FTS
+            if "content" in update_fields:
+                cursor.execute(
+                    """
+                    UPDATE memories_fts
+                    SET content = ?
+                    WHERE id = ?
+                    """,
+                    (update_fields["content"], memory_id),
+                )
+
+            self._conn.commit()
+            return cursor.rowcount > 0
+
+        except Exception as e:
+            self._conn.rollback()
+            raise SQLiteStoreError(f"Failed to update memory: {e}") from e
+
+    def delete_memory(self, memory_id: str) -> bool:
+        """Delete memory from all three tables.
+
+        Args:
+            memory_id: Memory ID
+
+        Returns:
+            True if deleted, False if not found
+
+        Raises:
+            SQLiteStoreError: If delete fails
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            # Check if memory exists
+            cursor.execute("SELECT 1 FROM memories WHERE id = ?", (memory_id,))
+            if not cursor.fetchone():
+                return False
+
+            # Delete from all three tables atomically
+            cursor.execute("DELETE FROM memories WHERE id = ?", (memory_id,))
+            cursor.execute("DELETE FROM memories_vec WHERE id = ?", (memory_id,))
+            cursor.execute("DELETE FROM memories_fts WHERE id = ?", (memory_id,))
+
+            # Also delete any edges involving this memory
+            cursor.execute(
+                "DELETE FROM edges WHERE source_id = ? OR target_id = ?",
+                (memory_id, memory_id),
+            )
+
+            self._conn.commit()
+            return True
+
+        except Exception as e:
+            self._conn.rollback()
+            raise SQLiteStoreError(f"Failed to delete memory: {e}") from e
+
+    def list_memories(
+        self,
+        namespace: str | None = None,
+        memory_type: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict]:
+        """List memories with optional filters and pagination.
+
+        Args:
+            namespace: Optional namespace filter
+            memory_type: Optional memory type filter
+            limit: Maximum number of results
+            offset: Number of results to skip
+
+        Returns:
+            List of memory dicts
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            # Build query with optional filters
+            conditions = []
+            params: list[Any] = []
+
+            if namespace is not None:
+                conditions.append("namespace = ?")
+                params.append(namespace)
+
+            if memory_type is not None:
+                conditions.append("memory_type = ?")
+                params.append(memory_type)
+
+            where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+
+            cursor.execute(
+                f"""
+                SELECT id, content, content_hash, memory_type, namespace,
+                       confidence, importance, source_file, chunk_index,
+                       start_line, end_line, created_at, last_accessed,
+                       access_count, tags
+                FROM memories
+                {where_clause}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+                """,
+                params + [limit, offset],
+            )
+
+            return [self._row_to_memory(row) for row in cursor.fetchall()]
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to list memories: {e}") from e
+
+    def count_memories(
+        self,
+        namespace: str | None = None,
+        memory_type: str | None = None,
+    ) -> int:
+        """Count memories with optional filters.
+
+        Args:
+            namespace: Optional namespace filter
+            memory_type: Optional memory type filter
+
+        Returns:
+            Count of memories
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            conditions = []
+            params: list[Any] = []
+
+            if namespace is not None:
+                conditions.append("namespace = ?")
+                params.append(namespace)
+
+            if memory_type is not None:
+                conditions.append("memory_type = ?")
+                params.append(memory_type)
+
+            where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
+
+            cursor.execute(f"SELECT COUNT(*) FROM memories{where_clause}", params)
+            result = cursor.fetchone()
+            return result[0] if result else 0
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to count memories: {e}") from e
+
+    def _row_to_memory(self, row: sqlite3.Row) -> dict:
+        """Convert SQLite row to memory dict."""
+        memory = {
+            "id": row["id"],
+            "content": row["content"],
+            "content_hash": row["content_hash"],
+            "memory_type": row["memory_type"],
+            "namespace": row["namespace"],
+            "confidence": row["confidence"],
+            "importance": row["importance"],
+            "source_file": row["source_file"],
+            "chunk_index": row["chunk_index"],
+            "start_line": row["start_line"],
+            "end_line": row["end_line"],
+            "created_at": row["created_at"],
+            "last_accessed": row["last_accessed"],
+            "access_count": row["access_count"],
+        }
+
+        if row["tags"]:
+            try:
+                memory["tags"] = json.loads(row["tags"])
+            except json.JSONDecodeError:
+                memory["tags"] = None
+        else:
+            memory["tags"] = None
+
+        return memory
+
+    # =========================================================================
+    # Search Operations
+    # =========================================================================
+
+    def search_vector(
+        self,
+        embedding: list[float],
+        n_results: int = 5,
+        where: dict | None = None,
+    ) -> list[SearchResult]:
+        """KNN search using sqlite-vec.
+
+        Args:
+            embedding: Query embedding vector
+            n_results: Number of results to return
+            where: Optional filter dict (namespace, memory_type)
+
+        Returns:
+            List of SearchResult sorted by similarity (highest first)
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            # Build filter conditions
+            conditions = []
+            params: list[Any] = []
+
+            if where:
+                if "namespace" in where:
+                    conditions.append("m.namespace = ?")
+                    params.append(where["namespace"])
+                if "memory_type" in where:
+                    conditions.append("m.memory_type = ?")
+                    params.append(where["memory_type"])
+
+            filter_clause = " AND " + " AND ".join(conditions) if conditions else ""
+
+            # sqlite-vec KNN search with cosine distance
+            # Note: vec0 uses MATCH for KNN queries
+            query = f"""
+                SELECT m.*, v.distance
+                FROM memories m
+                JOIN (
+                    SELECT id, distance
+                    FROM memories_vec
+                    WHERE embedding MATCH ?
+                    ORDER BY distance
+                    LIMIT ?
+                ) v ON m.id = v.id
+                WHERE 1=1 {filter_clause}
+                ORDER BY v.distance
+            """
+
+            # For sqlite-vec, we need to pass the vector as bytes
+            vec_param = self._serialize_embedding(embedding)
+            cursor.execute(query, [vec_param, n_results] + params)
+
+            results = []
+            for row in cursor.fetchall():
+                # Convert cosine distance to similarity: similarity = 1.0 - distance
+                # sqlite-vec cosine distance is in range [0, 2]
+                distance = row["distance"]
+                similarity = 1.0 - (distance / 2.0)  # Normalize to [0, 1]
+
+                tags = None
+                if row["tags"]:
+                    try:
+                        tags = json.loads(row["tags"])
+                    except json.JSONDecodeError:
+                        pass
+
+                results.append(
+                    SearchResult(
+                        id=row["id"],
+                        content=row["content"],
+                        score=similarity,
+                        memory_type=row["memory_type"],
+                        namespace=row["namespace"],
+                        confidence=row["confidence"],
+                        importance=row["importance"],
+                        source_file=row["source_file"],
+                        chunk_index=row["chunk_index"],
+                        metadata=tags,
+                    )
+                )
+
+            return results
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to search vectors: {e}") from e
+
+    def search_fts(
+        self,
+        query: str,
+        n_results: int = 5,
+        where: dict | None = None,
+    ) -> list[SearchResult]:
+        """FTS5 search with BM25 ranking.
+
+        Args:
+            query: Search query string
+            n_results: Number of results to return
+            where: Optional filter dict (namespace, memory_type)
+
+        Returns:
+            List of SearchResult sorted by relevance (highest first)
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            # Escape FTS5 special characters
+            escaped_query = self._escape_fts_query(query)
+
+            # Build filter conditions
+            conditions = []
+            params: list[Any] = []
+
+            if where:
+                if "namespace" in where:
+                    conditions.append("m.namespace = ?")
+                    params.append(where["namespace"])
+                if "memory_type" in where:
+                    conditions.append("m.memory_type = ?")
+                    params.append(where["memory_type"])
+
+            filter_clause = " AND " + " AND ".join(conditions) if conditions else ""
+
+            # FTS5 with BM25 ranking (lower is better, so negate for consistency)
+            sql_query = f"""
+                SELECT m.*, -bm25(memories_fts) as score
+                FROM memories_fts f
+                JOIN memories m ON f.id = m.id
+                WHERE memories_fts MATCH ? {filter_clause}
+                ORDER BY score DESC
+                LIMIT ?
+            """
+
+            cursor.execute(sql_query, [escaped_query] + params + [n_results])
+
+            results = []
+            for row in cursor.fetchall():
+                tags = None
+                if row["tags"]:
+                    try:
+                        tags = json.loads(row["tags"])
+                    except json.JSONDecodeError:
+                        pass
+
+                results.append(
+                    SearchResult(
+                        id=row["id"],
+                        content=row["content"],
+                        score=row["score"],
+                        memory_type=row["memory_type"],
+                        namespace=row["namespace"],
+                        confidence=row["confidence"],
+                        importance=row["importance"],
+                        source_file=row["source_file"],
+                        chunk_index=row["chunk_index"],
+                        metadata=tags,
+                    )
+                )
+
+            return results
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to search FTS: {e}") from e
+
+    def _escape_fts_query(self, query: str) -> str:
+        """Escape FTS5 special characters in query.
+
+        FTS5 uses special syntax for operators. We escape them to
+        treat the query as a literal phrase search.
+        """
+        # FTS5 special characters: AND, OR, NOT, -, +, *, ", (, )
+        # For simple queries, wrap terms in double quotes
+        # Remove any existing quotes and re-quote
+        cleaned = query.strip()
+        if not cleaned:
+            return '""'
+
+        # If query contains special FTS characters, quote it
+        special_chars = ['"', "'", "(", ")", "-", "+", "*"]
+        has_special = any(c in cleaned for c in special_chars)
+
+        if has_special:
+            # Escape internal quotes and wrap in quotes
+            escaped = cleaned.replace('"', '""')
+            return f'"{escaped}"'
+
+        # For simple terms, just return as-is (FTS5 will handle it)
+        return cleaned
+
+    def search_hybrid(
+        self,
+        embedding: list[float],
+        query: str,
+        n_results: int = 5,
+        vector_weight: float = 0.7,
+    ) -> list[SearchResult]:
+        """Combine vector and FTS results with weighted scoring.
+
+        Uses Reciprocal Rank Fusion (RRF) to combine results from
+        vector search and FTS search.
+
+        Args:
+            embedding: Query embedding vector
+            query: Search query string
+            n_results: Number of results to return
+            vector_weight: Weight for vector scores (0.0-1.0)
+
+        Returns:
+            List of SearchResult sorted by combined score
+        """
+        fts_weight = 1.0 - vector_weight
+
+        try:
+            # Get more results from each search to have overlap for fusion
+            fetch_count = n_results * 3
+
+            # Perform both searches
+            vector_results = self.search_vector(embedding, n_results=fetch_count)
+            fts_results = self.search_fts(query, n_results=fetch_count)
+
+            # Build combined scores using RRF
+            # RRF score = sum(1 / (k + rank)) where k=60 is typical
+            k = 60
+            scores: dict[str, float] = {}
+            result_map: dict[str, SearchResult] = {}
+
+            # Add vector results
+            for rank, result in enumerate(vector_results, 1):
+                rrf_score = vector_weight * (1.0 / (k + rank))
+                scores[result.id] = scores.get(result.id, 0) + rrf_score
+                result_map[result.id] = result
+
+            # Add FTS results
+            for rank, result in enumerate(fts_results, 1):
+                rrf_score = fts_weight * (1.0 / (k + rank))
+                scores[result.id] = scores.get(result.id, 0) + rrf_score
+                if result.id not in result_map:
+                    result_map[result.id] = result
+
+            # Sort by combined score
+            sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
+
+            # Build final results with combined scores
+            results = []
+            for memory_id in sorted_ids[:n_results]:
+                result = result_map[memory_id]
+                # Replace score with combined RRF score
+                results.append(
+                    SearchResult(
+                        id=result.id,
+                        content=result.content,
+                        score=scores[memory_id],
+                        memory_type=result.memory_type,
+                        namespace=result.namespace,
+                        confidence=result.confidence,
+                        importance=result.importance,
+                        source_file=result.source_file,
+                        chunk_index=result.chunk_index,
+                        metadata=result.metadata,
+                    )
+                )
+
+            return results
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to perform hybrid search: {e}") from e
+
+    # =========================================================================
+    # Embedding Cache Operations
+    # =========================================================================
+
+    def get_cached_embedding(
+        self, content_hash: str, provider: str, model: str
+    ) -> list[float] | None:
+        """Retrieve cached embedding.
+
+        Args:
+            content_hash: SHA256 hash of content
+            provider: Embedding provider (e.g., 'mlx', 'ollama')
+            model: Model name
+
+        Returns:
+            Cached embedding or None if not found
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT embedding
+                FROM embedding_cache
+                WHERE content_hash = ? AND provider = ? AND model = ?
+                """,
+                (content_hash, provider, model),
+            )
+
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            return self._deserialize_embedding(row["embedding"])
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to get cached embedding: {e}") from e
+
+    def cache_embedding(
+        self, content_hash: str, provider: str, model: str, embedding: list[float]
+    ) -> None:
+        """Store embedding in cache.
+
+        Args:
+            content_hash: SHA256 hash of content
+            provider: Embedding provider (e.g., 'mlx', 'ollama')
+            model: Model name
+            embedding: Embedding vector
+
+        Raises:
+            SQLiteStoreError: If caching fails
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO embedding_cache
+                (content_hash, provider, model, embedding, dims, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    content_hash,
+                    provider,
+                    model,
+                    self._serialize_embedding(embedding),
+                    len(embedding),
+                    time.time(),
+                ),
+            )
+            self._conn.commit()
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to cache embedding: {e}") from e
