@@ -612,15 +612,15 @@ class MemoryDocument(BaseModel):
         metadata: dict[str, Any],
         embedding: Optional[list[float]] = None,
     ) -> "MemoryDocument":
-        """Create a MemoryDocument from ChromaStore result format.
+        """Create a MemoryDocument from storage result format.
 
-        Reconstructs a MemoryDocument from the format returned by ChromaStore
+        Reconstructs a MemoryDocument from the format returned by SQLiteStore
         queries. Handles the flattened metadata format.
 
         Args:
             doc_id: Document ID from storage
             content: Document content
-            metadata: Metadata dict from ChromaStore
+            metadata: Metadata dict from storage
             embedding: Optional embedding vector
 
         Returns:
