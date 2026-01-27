@@ -1691,11 +1691,11 @@ plan:
         - "grep -r 'ChromaStore' src/theo/ returns no matches"
         - "uv sync --dev succeeds without chromadb"
         - "uv run python -c 'from theo.storage import SQLiteStore' succeeds"
-        - "uv run python -m pytest tests/ -v passes all tests"
+        - "uv run python -m pytest tests/ -v -n auto passes all tests"
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage import SQLiteStore; print(\"OK\")'"
-        - "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/ -v --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
+        - "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/ -v -n auto --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
       runtime_metadata:
         dependency_checks:
           - command: "grep -r 'chromadb' /Users/harrison/Documents/Github/theo/src/ || echo 'None'"
@@ -1724,7 +1724,7 @@ plan:
            Remove "chromadb.*" from module list
 
         3. Run: uv sync --dev
-        4. Run: uv run python -m pytest tests/ -v
+        4. Run: uv run python -m pytest tests/ -v -n auto
         5. Verify all success criteria above
         </task_description>
       implementation:
@@ -1740,13 +1740,13 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && uv sync --dev && uv run python -m pytest tests/ -v --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
+            command: "cd /Users/harrison/Documents/Github/theo && uv sync --dev && uv run python -m pytest tests/ -v -n auto --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
             exit_on_failure: true
       commit:
         type: "build"
         message: "Remove chromadb dependency - migration complete"
         files: ["pyproject.toml", "uv.lock"]
-      status: "in-progress"
+      status: "failed"
       execution_history:
         - attempt_number: "1"
           commit_verification:
