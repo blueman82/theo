@@ -1145,12 +1145,17 @@ plan:
       depends_on: [11]
 
       success_criteria:
-        - "test_sqlite_store.py exists with comprehensive tests"
-        - "Tests cover add_memory, get_memory, update_memory, delete_memory"
+        - "tests/test_sqlite_store.py exists with comprehensive tests"
+        - "tests/test_chroma_store.py deleted or renamed"
+        - "Tests cover CRUD: add_memory, get_memory, update_memory, delete_memory"
+        - "Tests cover list_memories and count_memories with filters"
         - "Tests cover search_vector, search_fts, search_hybrid"
-        - "Tests cover embedding cache methods"
-        - "Tests use in-memory SQLite with sqlite-vec"
-        - "All tests pass"
+        - "Tests cover embedding cache: get_cached_embedding, cache_embedding"
+        - "Tests cover golden rule threshold (confidence >= 0.9)"
+        - "Tests cover edge operations (add_edge, get_edges, delete_edge)"
+        - "Tests use in-memory SQLite (':memory:') with sqlite-vec extension"
+        - "Mock embeddings use [0.1] * 1024 for 1024-dim vectors"
+        - "All tests pass with uv run pytest tests/test_sqlite_store.py -v"
         - "No TODO comments"
 
       test_commands:
