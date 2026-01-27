@@ -3,7 +3,6 @@
 # requires-python = ">=3.13"
 # dependencies = [
 #     "mcp[cli]",
-#     "chromadb",
 #     "httpx",
 #     "pydantic",
 #     "pydantic-settings",
