@@ -1746,11 +1746,6 @@ plan:
         type: "build"
         message: "Remove chromadb dependency - migration complete"
         files: ["pyproject.toml", "uv.lock"]
-      execution_history:
-        commit_verification:
-          found: true
-          hash: 41ea264
-          message: 'build: Remove chromadb dependency - migration complete'
       status: "failed"
       execution_history:
         - attempt_number: "1"
