@@ -1587,6 +1587,29 @@ plan:
         type: "test"
         message: "Update integration tests to use SQLiteStore"
         files: ["tests/integration/**"]
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: cd0e9c5
+            message: 'test: Update integration tests to use SQLiteStore'
+        - attempt_number: "1"
+          agent: test-automator
+          verdict: GREEN
+          agent_output: '{"errors":[],"files_modified":[],"metadata":{"already_completed":true,"previous_commits":["cd0e9c5","d657a94"],"tests_failed":0,"tests_passed":44},"output":"The integration tests at tests/integration/test_full_pipeline.py and tests/integration/test_mcp_tools.py were already updated to use SQLiteStore instead of ChromaStore in previous commits (cd0e9c5 and d657a94).\n\nVerification performed:\n1. Both files import SQLiteStore: `from theo.storage import SQLiteStore`\n2. Both files use SQLiteStore fixtures: `store = SQLiteStore(db_path=temp_db_path)`\n3. No ChromaStore references exist in tests/integration/\n4. All 44 integration tests pass: `uv run pytest tests/integration/ -v` (2.13s execution)\n\nTest breakdown:\n- tests/integration/test_full_pipeline.py: 17 tests passed\n- tests/integration/test_mcp_tools.py: 27 tests passed\n\nNo new commits required as the task was already completed.","status":"success","summary":"Integration tests already use SQLiteStore - no changes needed"}'
+          qc_feedback: |-
+            [code-reviewer] All success criteria have been met. Both integration test files have been successfully updated to use SQLiteStore instead of ChromaStore:
+
+            1. **tests/integration/test_full_pipeline.py** (line 24): `from theo.storage import SQLiteStore`
+            2. **tests/integration/test_mcp_tools.py** (line 24): `from theo.storage import SQLiteStore`
+
+            Both files use `SQLiteStore(db_path=temp_db_path)` for instantiation in their fixtures. All 68 integration tests pass (95.27s execution time). No ChromaStore references remain in the integration test directory. No TODO comments present. The commit was properly created (cd0e9c5) with the required message.
+            [python-backend-tdd-agent] All success criteria satisfied. Both integration test files (test_full_pipeline.py and test_mcp_tools.py) correctly import and use SQLiteStore instead of ChromaStore. No ChromaStore references remain in the tests/integration directory. All 68 integration tests pass. No TODO comments present. The commit was properly created with the message "test: Update integration tests to use SQLiteStore" (cd0e9c5).
+            [database-optimizer] All integration tests successfully use SQLiteStore instead of ChromaStore. All 68 integration tests pass. Both test_full_pipeline.py and test_mcp_tools.py import SQLiteStore from theo.storage (line 24 in both files), instantiate SQLiteStore with temporary database paths (lines 111 and 93 respectively), and use SQLiteStore API methods including count_memories, list_memories, and close(). No ChromaStore references or TODO comments exist in the integration test directory.
+            [qa-expert] All success criteria are met. Both integration test files correctly import and use SQLiteStore instead of ChromaStore. All 68 integration tests pass (95.27s execution). The agent verified the task was already completed in previous commits (cd0e9c5) and correctly avoided making unnecessary changes.
+          timestamp: "2026-01-27T10:48:41Z"
+      completed_date: "2026-01-27"
     - task_number: "16"
       name: "Fix validation tests for SQLiteStore"
       agent: "test-automator"
@@ -1637,6 +1660,24 @@ plan:
         type: "test"
         message: "Fix validation tests for SQLiteStore migration"
         files: ["tests/test_validation.py"]
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: d479985
+            message: 'test: Fix validation tests for SQLiteStore migration'
+        - attempt_number: "1"
+          agent: test-automator
+          verdict: GREEN
+          agent_output: '{"files_modified":["tests/test_validation.py"],"metadata":{"commit_sha":"d479985","tests_passed":37,"tests_run":37},"output":"Updated tests/test_validation.py to work with SQLiteStore-based validation:\n\nChanges made:\n1. Updated mock_store fixture to use SQLiteStore API:\n   - get_memory(id) -\u003e dict | None (instead of ChromaStore''s get() with {ids, documents, metadatas})\n   - update_memory(id, **fields) -\u003e bool (instead of update_confidence())\n   - list_memories(namespace, memory_type, limit) -\u003e list[dict]\n\n2. Created sample_memory fixture with proper SQLiteStore dict format:\n   - Contains all required fields: id, content, content_hash, memory_type, namespace\n   - Includes confidence, importance, timestamps, access_count, tags\n\n3. Updated all test method mock configurations:\n   - Changed mock_store.get.return_value to mock_store.get_memory.return_value\n   - Changed mock_store.update_confidence.assert_called_once() to mock_store.update_memory.assert_called_once()\n   - Updated memory dict format from {ids: [], documents: [], metadatas: []} to direct dict return\n\n4. Updated time handling:\n   - Changed from datetime.isoformat() strings to Unix timestamps (time.time())\n   - Proper timestamp calculations for decay tests\n\nAll 37 tests pass:\n- 11 ValidationLoop tests\n- 9 FeedbackCollector tests\n- 3 UsageFeedback tests\n- 2 CreateImplicitFeedback tests\n- 12 GoldenRules tests\n- 2 Integration tests\n\nCommit: d479985 - test: Fix validation tests for SQLiteStore migration","status":"success","summary":"Fixed validation tests for SQLiteStore migration - all 37 tests pass"}'
+          qc_feedback: |-
+            [code-reviewer] All success criteria are satisfied. The validation tests have been correctly updated to use SQLiteStore-based mocking. The mock_store fixture properly mocks SQLiteStore API methods (get_memory, update_memory, list_memories), all 37 tests pass, no ChromaStore references remain, and no TODO comments exist. The commit d479985 was created correctly with the required message.
+            [python-backend-tdd-agent] All success criteria met. The validation tests have been correctly migrated to use SQLiteStore API. The mock_store fixture properly configures SQLiteStore methods (get_memory, update_memory, list_memories), all 37 tests pass, there are no TODO comments or ChromaStore references, and the commit was created with the correct message.
+            [qa-expert] All success criteria have been met. The test file has been successfully updated to use SQLiteStore instead of ChromaStore. The mock_store fixture creates a MagicMock that simulates SQLiteStore API methods (get_memory, update_memory, list_memories). All 37 tests pass as verified by the test run. No ChromaStore references remain in the file and no TODO comments are present. The commit d479985 was created with the correct message.
+            [database-admin] All success criteria verified. The test file correctly implements SQLiteStore-based mocking with proper API methods (get_memory, update_memory, list_memories), uses dict return format instead of ChromaStore's nested structure, and all 37 tests pass. No TODO comments found, no ChromaStore references remain. The mock_store fixture properly documents and simulates the SQLiteStore API. Commit d479985 correctly captures the migration.
+          timestamp: "2026-01-27T10:43:55Z"
+      completed_date: "2026-01-27"
     - task_number: "14"
       name: "Remove chromadb dependency"
       agent: "python-pro"
@@ -1654,7 +1695,7 @@ plan:
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage import SQLiteStore; print(\"OK\")'"
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/ -v --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
+        - "cd /Users/harrison/Documents/Github/theo && uv run python -m pytest tests/ -v --ignore=tests/test_migration.py --ignore=tests/test_chroma_store.py"
       runtime_metadata:
         dependency_checks:
           - command: "grep -r 'chromadb' /Users/harrison/Documents/Github/theo/src/ || echo 'None'"
@@ -1706,6 +1747,13 @@ plan:
         message: "Remove chromadb dependency - migration complete"
         files: ["pyproject.toml", "uv.lock"]
       execution_history:
+        commit_verification:
+          found: true
+          hash: 41ea264
+          message: 'build: Remove chromadb dependency - migration complete'
+      status: "failed"
+      execution_history:
+        - attempt_number: "1"
           commit_verification:
             found: true
             hash: 41ea264
