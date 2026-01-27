@@ -528,14 +528,12 @@ class TestManagementTools:
 
         assert result["success"] is False
         assert "confirmation" in result["error"].lower()
-        # Store.clear should not be called
-        mock_store.clear.assert_not_called()
+        # delete_memory should not be called when not confirmed
+        mock_store.delete_memory.assert_not_called()
 
     def test_delete_all_with_confirmation(self, mock_store):
         """Test delete_all works with confirmation."""
         from theo.tools.management_tools import ManagementTools
-
-        mock_store.clear.return_value = 10
 
         tools = ManagementTools(store=mock_store)
 
@@ -545,7 +543,8 @@ class TestManagementTools:
 
         assert result["success"] is True
         assert result["data"]["deleted_count"] == 10
-        mock_store.clear.assert_called_once()
+        # delete_memory called once for each memory in list_memories
+        assert mock_store.delete_memory.call_count == 10
 
 
 # =============================================================================
