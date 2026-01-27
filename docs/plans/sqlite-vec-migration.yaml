@@ -22,12 +22,10 @@ conductor:
     - group_id: "cleanup"
       tasks: [11, 12, 13, 14]
       rationale: "Final cleanup, migration, tests, dependency removal"
-
 planner_compliance:
   planner_version: "4.0.0"
   strict_enforcement: true
   required_features: [dependency_checks, test_commands, success_criteria, data_flow_registry]
-
 data_flow_registry:
   producers:
     sqlite_vec_tables:
@@ -56,7 +54,6 @@ data_flow_registry:
     updated_config:
       - task: 9
         description: "__main__ uses updated config"
-
 plan:
   metadata:
     feature_name: "sqlite-vec Migration"
@@ -75,24 +72,20 @@ plan:
       files:
         - "pyproject.toml"
       depends_on: []
-
       success_criteria:
         - "sqlite-vec>=0.1.6 added to dependencies in pyproject.toml"
         - "chromadb dependency remains until task 14"
         - "uv sync succeeds without errors"
         - "uv run python -c 'import sqlite_vec' succeeds"
         - "No TODO comments in production code"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'import sqlite_vec; print(sqlite_vec)'"
-
       runtime_metadata:
         dependency_checks:
           - command: "cat /Users/harrison/Documents/Github/theo/pyproject.toml | grep -A20 'dependencies'"
             description: "Verify current dependencies"
         documentation_targets: []
-
       description: |
         Add sqlite-vec package as dependency to pyproject.toml.
 
@@ -101,7 +94,6 @@ plan:
 
         Keep chromadb temporarily - needed for migration script in Task 12.
         Run: uv sync --dev
-
       implementation:
         approach: |
           Add sqlite-vec to dependencies list. Keep chromadb for now.
@@ -109,25 +101,21 @@ plan:
           - point: "Add sqlite-vec>=0.1.6 to dependencies"
             details: "Vector extension for SQLite, replaces ChromaDB for vector storage"
             reference: "pyproject.toml:[project].dependencies"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
             exit_on_failure: true
-
       commit:
         type: "build"
         message: "Add sqlite-vec dependency for vector storage migration"
         files: ["pyproject.toml"]
-
     - task_number: "2"
       name: "Extend sqlite_store.py with sqlite-vec tables"
       agent: "database-optimizer"
       files:
         - "src/theo/storage/sqlite_store.py"
       depends_on: [1]
-
       success_criteria:
         - "sqlite-vec extension loaded via sqlite_vec.load(conn)"
         - "memories table created with columns: id, content, content_hash, memory_type, namespace, confidence, importance, source_file, chunk_index, start_line, end_line, created_at, last_accessed, access_count, tags"
@@ -137,16 +125,13 @@ plan:
         - "Indexes created: idx_memories_type, idx_memories_namespace, idx_memories_confidence, idx_memories_source_file, idx_memories_hash, idx_embedding_cache_hash"
         - "Schema version incremented to 2"
         - "No TODO comments, no placeholder code"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c \"from theo.storage.sqlite_store import SQLiteStore; s = SQLiteStore(); print('Tables created')\""
-
       runtime_metadata:
         dependency_checks:
           - command: "cd /Users/harrison/Documents/Github/theo && uv run python -c 'import sqlite_vec'"
             description: "Verify sqlite-vec available"
         documentation_targets: []
-
       description: |
         <exact_sql_schema>
         Add these tables to _init_schema() method:
@@ -223,7 +208,6 @@ plan:
         3. Add all tables above to _init_schema()
         4. Update schema_version to 2
         </task_description>
-
       implementation:
         approach: |
           Extend existing _init_schema() with new tables. Load sqlite-vec in __init__.
@@ -246,25 +230,21 @@ plan:
           - point: "Create 6 indexes"
             details: "idx_memories_type, idx_memories_namespace, idx_memories_confidence, idx_memories_source_file, idx_memories_hash, idx_embedding_cache_hash"
             reference: "src/theo/storage/sqlite_store.py:_init_schema"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/storage/sqlite_store.py && uv run isort src/theo/storage/sqlite_store.py && uv run ruff check src/theo/storage/sqlite_store.py --fix && uv run mypy src/theo/storage/sqlite_store.py --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "feat"
         message: "Add sqlite-vec tables: memories, memories_vec, memories_fts, embedding_cache"
         files: ["src/theo/storage/sqlite_store.py"]
-
     - task_number: "3"
       name: "Add vector and FTS search methods to sqlite_store.py"
       agent: "database-optimizer"
       files:
         - "src/theo/storage/sqlite_store.py"
       depends_on: [2]
-
       success_criteria:
         - "add_memory() inserts to memories + memories_vec + memories_fts in single transaction"
         - "get_memory(id) retrieves memory with all metadata as dict"
@@ -279,16 +259,13 @@ plan:
         - "cache_embedding(content_hash, provider, model, embedding) stores in cache"
         - "All methods raise SQLiteStoreError on failure"
         - "No TODO comments, no placeholder code"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c \"from theo.storage.sqlite_store import SQLiteStore; print('Methods available')\""
-
       runtime_metadata:
         dependency_checks:
           - command: "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage.sqlite_store import SQLiteStore'"
             description: "Verify SQLiteStore imports"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: YAGNI, KISS, DRY, Fail Fast, Single Source of Truth.
@@ -391,7 +368,6 @@ plan:
         Implement all methods above. Use transactions for multi-table ops.
         Convert cosine distance to similarity: similarity = 1.0 - distance
         </task_description>
-
       implementation:
         approach: |
           Add methods following existing SQLiteStore patterns. Use transactions for multi-table ops.
@@ -429,18 +405,15 @@ plan:
           - point: "cache_embedding() stores embedding"
             details: "INSERT into embedding_cache"
             reference: "src/theo/storage/sqlite_store.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/storage/sqlite_store.py && uv run isort src/theo/storage/sqlite_store.py && uv run ruff check src/theo/storage/sqlite_store.py --fix && uv run mypy src/theo/storage/sqlite_store.py --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "feat"
         message: "Add vector search, FTS search, hybrid search, CRUD, and embedding cache"
         files: ["src/theo/storage/sqlite_store.py"]
-
     # =========================================================================
     # TYPES-CONFIG GROUP (parallel)
     # =========================================================================
@@ -450,7 +423,6 @@ plan:
       files:
         - "src/theo/config.py"
       depends_on: []
-
       success_criteria:
         - "chroma_path field removed from TheoSettings"
         - "collection_name field removed from TheoSettings"
@@ -459,16 +431,13 @@ plan:
         - "THEO_COLLECTION env var requirement removed"
         - "sqlite_path remains as primary storage path"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.config import TheoSettings; print(TheoSettings())'"
-
       runtime_metadata:
         dependency_checks:
           - command: "cat /Users/harrison/Documents/Github/theo/src/theo/config.py"
             description: "Check current config"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: YAGNI, KISS, Single Source of Truth (sqlite_path only).
@@ -484,7 +453,6 @@ plan:
 
         Update any env var references (THEO_DB_PATH was ChromaDB, remove it).
         </task_description>
-
       implementation:
         approach: |
           Simple field removal from Pydantic settings class.
@@ -492,25 +460,39 @@ plan:
           - point: "Remove chroma_path and collection_name"
             details: "These fields no longer needed"
             reference: "src/theo/config.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/config.py && uv run isort src/theo/config.py && uv run ruff check src/theo/config.py --fix && uv run mypy src/theo/config.py --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Remove ChromaDB config (chroma_path, collection_name)"
         files: ["src/theo/config.py"]
-
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: 323b709
+            message: 'refactor: Remove ChromaDB config (chroma_path, collection_name)'
+        - attempt_number: "1"
+          agent: python-pro
+          verdict: GREEN
+          agent_output: '{"errors":[],"files_modified":["src/theo/config.py"],"output":"Changes made to src/theo/config.py:\n\n1. Removed chroma_path field: `chroma_path: Path = Field(description=\"Path to ChromaDB storage\")`\n2. Removed collection_name field: `collection_name: str = Field(description=\"ChromaDB collection name\")`\n3. Removed get_chroma_path() method that expanded and resolved the ChromaDB path\n4. Updated docstring to reflect that sqlite_path is now the single source of truth for all storage\n\nArchitectural justification: This is part of the migration from ChromaDB to sqlite-vec. The sqlite_path now serves as the single source of truth for all storage (both metadata and vector embeddings), simplifying the configuration and aligning with the YAGNI and Single Source of Truth principles specified in the task.\n\nNote: Other modules (hybrid.py, __main__.py, chroma_store.py) that currently reference these config fields will need coordinated updates as part of the broader migration effort.\n\nCommit: 323b709 - refactor: Remove ChromaDB config (chroma_path, collection_name)","status":"success","summary":"Removed ChromaDB configuration fields (chroma_path, collection_name) and get_chroma_path() method from TheoSettings, keeping sqlite_path as the single source of truth for storage."}'
+          qc_feedback: |-
+            [code-reviewer] All success criteria satisfied. The config.py file has been properly refactored: chroma_path field removed, collection_name field removed, no get_chroma_path() method exists, no THEO_DB_PATH or THEO_COLLECTION env var references, sqlite_path remains as the primary storage path (line 42), and no TODO comments present. The docstring correctly reflects sqlite_path as the "single source of truth for all storage" (line 25). Commit 323b709 was properly created with the expected message.
+            [python-schema-architect] The agent successfully removed ChromaDB configuration from TheoSettings. The config.py file no longer contains chroma_path, collection_name, or get_chroma_path() method. sqlite_path remains as the single source of truth for storage. All test commands passed successfully. The commit was verified at 323b709.
+            [refactoring-specialist] All success criteria verified. The config.py file has been successfully updated: chroma_path and collection_name fields are removed, get_chroma_path() method is gone, sqlite_path remains as the primary storage path with get_sqlite_path() method intact, and no TODO comments exist. The docstring at line 25 now correctly references sqlite_path as the "single source of truth for all storage". Test command passed confirming TheoSettings can be instantiated without chroma-related fields. Commit 323b709 was properly created.
+            [architect-review] Task completed successfully. The agent correctly removed ChromaDB configuration fields (chroma_path and collection_name) from TheoSettings, removed the get_chroma_path() method, and updated the docstring to reflect that sqlite_path is now the single source of truth. The test command confirms the configuration loads correctly without ChromaDB fields. Commit 323b709 was created as required.
+          timestamp: "2026-01-27T07:02:19Z"
+      completed_date: "2026-01-27"
     - task_number: "7"
       name: "Update storage/types.py - remove ChromaDB helpers"
       agent: "python-pro"
       files:
         - "src/theo/storage/types.py"
       depends_on: []
-
       success_criteria:
         - "Document.to_chroma_metadata() method removed"
         - "Document.from_chroma_result() classmethod removed"
@@ -521,16 +503,13 @@ plan:
         - "Document dataclass field doc_type renamed to memory_type to match SQLite schema"
         - "Document dataclass field doc_hash renamed to content_hash to match SQLite schema"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage.types import Document, SearchResult; print(Document, SearchResult)'"
-
       runtime_metadata:
         dependency_checks:
           - command: "cat /Users/harrison/Documents/Github/theo/src/theo/storage/types.py"
             description: "Check current types"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: KISS, DRY, keep only what's used.
@@ -571,7 +550,6 @@ plan:
         - Add from_sqlite(doc: Document, distance: float, rank: int = 0) → SearchResult
           where similarity = 1.0 - distance
         </task_description>
-
       implementation:
         approach: |
           Replace ChromaDB serialization with SQLite row conversion.
@@ -600,18 +578,33 @@ plan:
           - point: "Add SearchResult.from_sqlite(doc, distance, rank)"
             details: "similarity = 1.0 - distance"
             reference: "src/theo/storage/types.py:SearchResult"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/storage/types.py && uv run isort src/theo/storage/types.py && uv run ruff check src/theo/storage/types.py --fix && uv run mypy src/theo/storage/types.py --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Replace ChromaDB helpers with SQLite serialization in types"
         files: ["src/theo/storage/types.py"]
-
+      status: "completed"
+      execution_history:
+        - attempt_number: "1"
+          commit_verification:
+            found: true
+            hash: b61369e
+            message: 'refactor: Replace ChromaDB helpers with SQLite serialization in types'
+        - attempt_number: "1"
+          agent: python-pro
+          verdict: GREEN
+          agent_output: '{"errors":[],"files_modified":["src/theo/storage/types.py"],"metadata":{"commit_hash":"b61369e","commit_message":"refactor: Replace ChromaDB helpers with SQLite serialization in types","tests_passed":true},"output":"Successfully refactored src/theo/storage/types.py:\n\n## Changes Made:\n\n### Document dataclass:\n1. **Field renames** (breaking changes, handled by dependent Tasks 4/11):\n   - `doc_type` → `memory_type`\n   - `doc_hash` → `content_hash`\n   - `metadata` → `tags`\n\n2. **New fields added**:\n   - `importance: float = 0.5` - Importance score\n   - `last_accessed: Optional[float]` - Unix timestamp\n   - `access_count: int = 0` - Access tracking\n   - `start_line: Optional[int]` - Source line range\n   - `end_line: Optional[int]` - Source line range\n\n3. **Type change**:\n   - `created_at` changed from `datetime` to `float` (unix timestamp)\n\n4. **Methods removed**:\n   - `to_chroma_metadata()` - ChromaDB serialization no longer needed\n   - `from_chroma_result()` - ChromaDB deserialization no longer needed\n\n5. **Methods added**:\n   - `to_dict()` → Returns dict with column names matching SQLite schema\n   - `from_row(row: sqlite3.Row)` → Creates Document from sqlite3.Row\n\n### SearchResult dataclass:\n1. **Method removed**:\n   - `from_chroma_result()` - ChromaDB deserialization no longer needed\n\n2. **Method added**:\n   - `from_sqlite(doc, distance, rank)` → Creates SearchResult with similarity = 1.0 - distance\n\n### StoreStats dataclass:\n1. **Field rename**:\n   - `doc_types` → `memory_types`\n\n### Architectural Justification:\n- Field renames align with SQLite schema naming conventions (memory_type, content_hash)\n- Unix timestamps (float) are more efficient for SQLite storage than ISO strings\n- New fields (importance, last_accessed, access_count, start_line, end_line) support the unified memory/document model\n- tags dict replaces the meta_* prefix pattern for cleaner JSON serialization","status":"success","summary":"Replaced ChromaDB helpers with SQLite serialization in storage/types.py"}'
+          qc_feedback: |-
+            [code-reviewer] All success criteria verified. The agent successfully refactored storage/types.py to replace ChromaDB helpers with SQLite serialization. Document fields renamed correctly (doc_type→memory_type, doc_hash→content_hash), all ChromaDB methods removed, and new SQLite methods (to_dict, from_row, from_sqlite) added with correct implementations. Test command passed confirming valid Python syntax and importability.
+            [python-schema-architect] All success criteria satisfied. The refactoring successfully replaced ChromaDB helpers with SQLite serialization. ChromaDB methods (to_chroma_metadata, from_chroma_result) have been removed from both Document and SearchResult classes. New SQLite-compatible methods (to_dict, from_row, from_sqlite) have been added. Field renames completed: doc_type→memory_type, doc_hash→content_hash. No TODO comments remain. Code follows Pythonic patterns with type hints, dataclasses, and classmethods for factories.
+            [architect-review] All success criteria verified. The refactoring successfully replaced ChromaDB helpers with SQLite serialization methods. Document and SearchResult dataclasses now have SQLite-compatible serialization (to_dict, from_row, from_sqlite) instead of ChromaDB methods (to_chroma_metadata, from_chroma_result). Field renames (doc_type→memory_type, doc_hash→content_hash) are correctly implemented. No TODO comments present. Test command passed confirming imports work correctly.
+            [database-optimizer] All success criteria verified. The storage/types.py file has been correctly refactored: ChromaDB methods (to_chroma_metadata, from_chroma_result) have been removed from both Document and SearchResult classes. New SQLite-compatible methods have been added: Document.to_dict() returns a dict matching the SQLite schema, Document.from_row() creates instances from sqlite3.Row objects, and SearchResult.from_sqlite() creates results with similarity = 1.0 - distance. Field renames (doc_type→memory_type, doc_hash→content_hash) match the SQLite schema. No TODO comments present. Test command passed successfully.
+          timestamp: "2026-01-27T06:57:18Z"
+      completed_date: "2026-01-27"
     # =========================================================================
     # STORAGE LAYER GROUP
     # =========================================================================
@@ -621,7 +614,6 @@ plan:
       files:
         - "src/theo/storage/hybrid.py"
       depends_on: [3]
-
       success_criteria:
         - "ChromaStore import and usage removed"
         - "HybridStore.__init__ takes SQLiteStore + EmbeddingProvider (no ChromaStore parameter)"
@@ -632,16 +624,13 @@ plan:
         - "delete_memory() delegates to SQLiteStore.delete_memory()"
         - "Edge operations unchanged (already use SQLiteStore)"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage.hybrid import HybridStore; print(HybridStore)'"
-
       runtime_metadata:
         dependency_checks:
           - command: "grep -n 'ChromaStore' /Users/harrison/Documents/Github/theo/src/theo/storage/hybrid.py || echo 'No refs'"
             description: "Find ChromaStore references"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: KISS, Law of Demeter (thin wrapper), Single Source of Truth.
@@ -663,7 +652,6 @@ plan:
            - self._chroma.delete() → self._sqlite.delete_memory()
         5. Keep edge operations (already use SQLiteStore)
         </task_description>
-
       implementation:
         approach: |
           Replace ChromaStore delegation with SQLiteStore delegation.
@@ -683,25 +671,21 @@ plan:
           - point: "Delegate search to search_hybrid()"
             details: "search() calls self._sqlite.search_hybrid()"
             reference: "src/theo/storage/hybrid.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/storage/hybrid.py && uv run isort src/theo/storage/hybrid.py && uv run ruff check src/theo/storage/hybrid.py --fix && uv run mypy src/theo/storage/hybrid.py --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Update HybridStore to use SQLiteStore instead of ChromaStore"
         files: ["src/theo/storage/hybrid.py"]
-
     - task_number: "8"
       name: "Update storage/__init__.py exports"
       agent: "python-pro"
       files:
         - "src/theo/storage/__init__.py"
       depends_on: [3, 7]
-
       success_criteria:
         - "ChromaStore removed from imports and __all__"
         - "SQLiteStore, SQLiteStoreError exported"
@@ -710,16 +694,13 @@ plan:
         - "StorageError = SQLiteStoreError alias added for backwards compatibility"
         - "Module docstring updated to describe sqlite-vec instead of ChromaDB"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage import SQLiteStore, HybridStore, Document; print(SQLiteStore)'"
-
       runtime_metadata:
         dependency_checks:
           - command: "cat /Users/harrison/Documents/Github/theo/src/theo/storage/__init__.py"
             description: "Check current exports"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: Single Source of Truth (one store export).
@@ -741,7 +722,6 @@ plan:
         Add: StorageError = SQLiteStoreError (backwards compat alias)
         Update docstring - remove ChromaDB, describe sqlite-vec.
         </task_description>
-
       implementation:
         approach: |
           Simple import cleanup.
@@ -761,18 +741,15 @@ plan:
           - point: "Update module docstring"
             details: "Remove ChromaDB mention, describe sqlite-vec storage"
             reference: "src/theo/storage/__init__.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/storage/__init__.py && uv run isort src/theo/storage/__init__.py && uv run ruff check src/theo/storage/__init__.py --fix"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Update storage exports - remove ChromaStore"
         files: ["src/theo/storage/__init__.py"]
-
     # =========================================================================
     # ENTRY POINT GROUP
     # =========================================================================
@@ -782,7 +759,6 @@ plan:
       files:
         - "src/theo/__main__.py"
       depends_on: [6, 8]
-
       success_criteria:
         - "ChromaStore initialization removed from initialize_components()"
         - "SQLiteStore used for all memory/vector operations"
@@ -793,16 +769,13 @@ plan:
         - "_require_env('THEO_COLLECTION') removed"
         - "Tool instances receive SQLiteStore where ChromaStore was used"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.__main__ import initialize_components; print(\"imports ok\")'"
-
       runtime_metadata:
         dependency_checks:
           - command: "grep -n 'ChromaStore\\|chroma' /Users/harrison/Documents/Github/theo/src/theo/__main__.py || echo 'No refs'"
             description: "Find ChromaDB references"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: KISS, Single Source of Truth (SQLiteStore only).
@@ -824,7 +797,6 @@ plan:
         - Update HybridStore creation - pass only SQLiteStore + embedder
         - Update tool instantiation - pass SQLiteStore where ChromaStore was used
         </task_description>
-
       implementation:
         approach: |
           Simplify initialization by removing ChromaStore.
@@ -850,18 +822,15 @@ plan:
           - point: "Update tool instantiation"
             details: "Pass SQLiteStore where ChromaStore was used"
             reference: "src/theo/__main__.py:initialize_components"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/__main__.py && uv run isort src/theo/__main__.py && uv run ruff check src/theo/__main__.py --fix && uv run mypy src/theo/__main__.py --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Update __main__.py to use SQLiteStore only"
         files: ["src/theo/__main__.py"]
-
     # =========================================================================
     # CONSUMERS GROUP
     # =========================================================================
@@ -873,23 +842,19 @@ plan:
         - "src/theo/validation/loop.py"
         - "src/theo/validation/feedback.py"
       depends_on: [9]
-
       success_criteria:
         - "ChromaStore imports replaced with SQLiteStore"
         - "ValidationLoop uses SQLiteStore for confidence updates"
         - "Golden rules check: confidence >= 0.9 OR memory_type == 'golden_rule'"
         - "is_golden_rule() uses SQLiteStore.get_memory()"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.validation import ValidationLoop; print(ValidationLoop)'"
-
       runtime_metadata:
         dependency_checks:
           - command: "grep -rn 'ChromaStore\\|chroma' /Users/harrison/Documents/Github/theo/src/theo/validation/ || echo 'No refs'"
             description: "Find ChromaStore references"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: KISS, Fail Fast.
@@ -925,7 +890,6 @@ plan:
           memory = store.get_memory(memory_id)
           return memory['confidence'] >= 0.9 or memory['memory_type'] == 'golden_rule'
         </task_description>
-
       implementation:
         approach: |
           Find and replace ChromaStore with SQLiteStore.
@@ -942,18 +906,15 @@ plan:
           - point: "Update type hints"
             details: "Change store parameter types from ChromaStore to SQLiteStore"
             reference: "src/theo/validation/"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/validation/ && uv run isort src/theo/validation/ && uv run ruff check src/theo/validation/ --fix && uv run mypy src/theo/validation/ --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Update validation modules to use SQLiteStore"
         files: ["src/theo/validation/**"]
-
     - task_number: "10"
       name: "Update tools/ to use SQLiteStore"
       agent: "python-pro"
@@ -963,7 +924,6 @@ plan:
         - "src/theo/tools/indexing_tools.py"
         - "src/theo/tools/management_tools.py"
       depends_on: [9]
-
       success_criteria:
         - "ChromaStore imports replaced with SQLiteStore in all 4 files"
         - "memory_tools.py: memory_store uses add_memory(), memory_recall uses search_hybrid(), memory_forget uses delete_memory()"
@@ -972,16 +932,13 @@ plan:
         - "management_tools.py: get_stats uses count_memories() and list_memories()"
         - "Type hints updated from ChromaStore to SQLiteStore"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.tools import MemoryTools, QueryTools; print(MemoryTools, QueryTools)'"
-
       runtime_metadata:
         dependency_checks:
           - command: "grep -rn 'ChromaStore\\|chroma' /Users/harrison/Documents/Github/theo/src/theo/tools/ || echo 'No refs'"
             description: "Find ChromaStore references"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: KISS, DRY (consistent method names).
@@ -1003,7 +960,6 @@ plan:
         2. Update type hints for store parameter
         3. Update method calls per mapping above
         </task_description>
-
       implementation:
         approach: |
           Systematic find-replace in all tool files.
@@ -1023,18 +979,15 @@ plan:
           - point: "Update type hints in all 4 files"
             details: "Change store parameter from ChromaStore to SQLiteStore"
             reference: "src/theo/tools/"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/tools/ && uv run isort src/theo/tools/ && uv run ruff check src/theo/tools/ --fix && uv run mypy src/theo/tools/ --ignore-missing-imports"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Update all tools to use SQLiteStore"
         files: ["src/theo/tools/**"]
-
     # =========================================================================
     # CLEANUP GROUP
     # =========================================================================
@@ -1044,23 +997,19 @@ plan:
       files:
         - "src/theo/storage/chroma_store.py"
       depends_on: [4, 8]
-
       success_criteria:
         - "chroma_store.py file deleted"
         - "No remaining imports of chroma_store in codebase"
         - "All imports still work after deletion"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && test ! -f src/theo/storage/chroma_store.py && echo 'Deleted'"
         - "cd /Users/harrison/Documents/Github/theo && grep -r 'chroma_store' src/theo/ && exit 1 || echo 'No refs'"
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage import SQLiteStore; print(\"OK\")'"
-
       runtime_metadata:
         dependency_checks:
           - command: "grep -rn 'from theo.storage.chroma_store' /Users/harrison/Documents/Github/theo/src/ || echo 'None'"
             description: "Verify no imports remain"
         documentation_targets: []
-
       description: |
         Delete ChromaDB storage implementation:
 
@@ -1069,7 +1018,6 @@ plan:
         3. Verify imports work: python -c 'from theo.storage import SQLiteStore'
 
         This removes ~825 lines of code.
-
       implementation:
         approach: |
           Verify no references, then delete file.
@@ -1080,25 +1028,21 @@ plan:
           - point: "Delete file"
             details: "rm src/theo/storage/chroma_store.py"
             reference: "src/theo/storage/chroma_store.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run python -c 'import theo.storage'"
             exit_on_failure: true
-
       commit:
         type: "refactor"
         message: "Delete ChromaDB storage (replaced by sqlite-vec)"
         files: ["src/theo/storage/chroma_store.py"]
-
     - task_number: "12"
       name: "Create migration script"
       agent: "database-optimizer"
       files:
         - "scripts/migrate_to_sqlite_vec.py"
       depends_on: [11]
-
       success_criteria:
         - "Migration script at scripts/migrate_to_sqlite_vec.py"
         - "Creates backup of theo.db and chroma_db before migration"
@@ -1115,16 +1059,13 @@ plan:
         - "--dry-run flag shows what would be migrated without changes"
         - "Progress logging shows migration status"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run python scripts/migrate_to_sqlite_vec.py --dry-run || echo 'Dry run'"
-
       runtime_metadata:
         dependency_checks:
           - command: "mkdir -p /Users/harrison/Documents/Github/theo/scripts"
             description: "Ensure scripts dir exists"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: Fail Fast (verify at each step), Single Source of Truth.
@@ -1206,7 +1147,6 @@ plan:
             # 5. Verify golden rules
         ```
         </task_description>
-
       implementation:
         approach: |
           Read from ChromaDB, write to SQLite with exact mapping.
@@ -1238,25 +1178,21 @@ plan:
           - point: "Error handling with rollback"
             details: "On failure, restore from .backup files"
             reference: "scripts/migrate_to_sqlite_vec.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run black scripts/migrate_to_sqlite_vec.py && uv run isort scripts/migrate_to_sqlite_vec.py && uv run ruff check scripts/migrate_to_sqlite_vec.py --fix"
             exit_on_failure: true
-
       commit:
         type: "feat"
         message: "Add ChromaDB to sqlite-vec migration script"
         files: ["scripts/migrate_to_sqlite_vec.py"]
-
     - task_number: "13"
       name: "Update tests for sqlite-vec"
       agent: "test-automator"
       files:
         - "tests/test_sqlite_store.py"
       depends_on: [11]
-
       success_criteria:
         - "tests/test_sqlite_store.py exists with comprehensive tests"
         - "tests/test_chroma_store.py deleted or renamed"
@@ -1270,16 +1206,13 @@ plan:
         - "Mock embeddings use [0.1] * 1024 for 1024-dim vectors"
         - "All tests pass with uv run pytest tests/test_sqlite_store.py -v"
         - "No TODO comments"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_sqlite_store.py -v"
-
       runtime_metadata:
         dependency_checks:
           - command: "ls /Users/harrison/Documents/Github/theo/tests/test_*store*.py || echo 'None'"
             description: "Check existing tests"
         documentation_targets: []
-
       description: |
         <mandatory_principles>
         ENGINEERING: DRY (shared fixtures), Fail Fast.
@@ -1311,7 +1244,6 @@ plan:
 
         Use mock embeddings (list of 1024 floats).
         </task_description>
-
       implementation:
         approach: |
           pytest with fixtures and parametrize.
@@ -1340,25 +1272,21 @@ plan:
           - point: "Tests cover edge operations (add_edge, get_edges, delete_edge)"
             details: "Graph operations preserved"
             reference: "tests/test_sqlite_store.py"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_sqlite_store.py -v"
             exit_on_failure: true
-
       commit:
         type: "test"
         message: "Add comprehensive tests for SQLiteStore with sqlite-vec"
         files: ["tests/test_sqlite_store.py"]
-
     - task_number: "14"
       name: "Remove chromadb dependency"
       agent: "python-pro"
       files:
         - "pyproject.toml"
       depends_on: [11, 13]
-
       success_criteria:
         - "chromadb>=0.4.0 removed from [project].dependencies"
         - "chromadb.* removed from [[tool.mypy.overrides]] module list"
@@ -1367,18 +1295,15 @@ plan:
         - "uv sync --dev succeeds without chromadb"
         - "uv run python -c 'from theo.storage import SQLiteStore' succeeds"
         - "uv run pytest tests/ -v passes all tests"
-
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
         - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.storage import SQLiteStore; print(\"OK\")'"
         - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/ -v --ignore=tests/test_migration.py"
-
       runtime_metadata:
         dependency_checks:
           - command: "grep -r 'chromadb' /Users/harrison/Documents/Github/theo/src/ || echo 'None'"
             description: "Verify no chromadb imports"
         documentation_targets: []
-
       description: |
         <overall_success_criteria>
         Final verification (from original plan Part 9):
@@ -1405,7 +1330,6 @@ plan:
         4. Run: uv run pytest tests/ -v
         5. Verify all success criteria above
         </task_description>
-
       implementation:
         approach: |
           Remove lines from pyproject.toml.
@@ -1416,13 +1340,11 @@ plan:
           - point: "Remove mypy override"
             details: "Delete chromadb.* from overrides"
             reference: "pyproject.toml"
-
       code_quality:
         python:
           full_quality_pipeline:
             command: "cd /Users/harrison/Documents/Github/theo && uv sync --dev && uv run pytest tests/ -v --ignore=tests/test_migration.py"
             exit_on_failure: true
-
       commit:
         type: "build"
         message: "Remove chromadb dependency - migration complete"
