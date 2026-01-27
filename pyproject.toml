@@ -85,3 +85,8 @@ line-length = 100
 [tool.isort]
 profile = "black"
 line_length = 100
+
+[dependency-groups]
+dev = [
+    "chromadb>=1.4.1",
+]
