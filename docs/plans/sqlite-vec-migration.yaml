@@ -829,11 +829,26 @@ plan:
         approach: |
           Simplify initialization by removing ChromaStore.
         key_points:
-          - point: "Remove ChromaStore initialization"
-            details: "Delete the ChromaStore step in initialize_components"
+          - point: "Remove --db-path argument from parse_arguments()"
+            details: "Was ChromaDB path, no longer needed"
+            reference: "src/theo/__main__.py:parse_arguments"
+          - point: "Remove --collection argument from parse_arguments()"
+            details: "Was ChromaDB collection name"
+            reference: "src/theo/__main__.py:parse_arguments"
+          - point: "Remove _require_env('THEO_DB_PATH')"
+            details: "ChromaDB env var requirement"
+            reference: "src/theo/__main__.py"
+          - point: "Remove _require_env('THEO_COLLECTION')"
+            details: "ChromaDB env var requirement"
+            reference: "src/theo/__main__.py"
+          - point: "Remove ChromaStore initialization step"
+            details: "Delete step 2 in initialize_components"
             reference: "src/theo/__main__.py:initialize_components"
           - point: "Update HybridStore creation"
-            details: "Pass only sqlite_store and embedder"
+            details: "Pass only sqlite_store and embedder, no chroma_store"
+            reference: "src/theo/__main__.py:initialize_components"
+          - point: "Update tool instantiation"
+            details: "Pass SQLiteStore where ChromaStore was used"
             reference: "src/theo/__main__.py:initialize_components"
 
       code_quality:
