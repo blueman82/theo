@@ -650,11 +650,20 @@ plan:
         approach: |
           Replace ChromaStore delegation with SQLiteStore delegation.
         key_points:
-          - point: "Remove ChromaStore dependency"
-            details: "Delete import and self._chroma"
+          - point: "Remove ChromaStore import and self._chroma"
+            details: "Delete from imports and __init__"
             reference: "src/theo/storage/hybrid.py"
-          - point: "Delegate to SQLiteStore methods"
-            details: "add_memory, search_hybrid, get_memory, delete_memory"
+          - point: "Update __init__ signature"
+            details: "Takes SQLiteStore + EmbeddingProvider, no ChromaStore"
+            reference: "src/theo/storage/hybrid.py:__init__"
+          - point: "Update create() factory method"
+            details: "Don't create ChromaStore, only SQLiteStore + embedder"
+            reference: "src/theo/storage/hybrid.py:create"
+          - point: "Delegate CRUD to SQLiteStore"
+            details: "add_memory(), get_memory(), delete_memory()"
+            reference: "src/theo/storage/hybrid.py"
+          - point: "Delegate search to search_hybrid()"
+            details: "search() calls self._sqlite.search_hybrid()"
             reference: "src/theo/storage/hybrid.py"
 
       code_quality:
