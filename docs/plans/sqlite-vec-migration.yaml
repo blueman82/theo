@@ -1121,7 +1121,7 @@ plan:
       agent: "python-pro"
       files:
         - "src/theo/storage/chroma_store.py"
-      depends_on: [4, 8]
+      depends_on: [4, 5, 8, 9, 10]
       success_criteria:
         - "chroma_store.py file deleted"
         - "No remaining imports of chroma_store in codebase"
@@ -1165,6 +1165,10 @@ plan:
       status: "in-progress"
       execution_history:
         - attempt_number: "1"
+          commit_verification:
+            found: false
+            mismatch: 'no commit found matching "refactor: Delete ChromaDB storage (replaced by sqlite-vec)"'
+        - attempt_number: "2"
           commit_verification:
             found: false
             mismatch: 'no commit found matching "refactor: Delete ChromaDB storage (replaced by sqlite-vec)"'
