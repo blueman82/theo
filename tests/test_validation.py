@@ -100,7 +100,7 @@ class TestValidationLoop:
         assert result.success is True
         assert result.doc_id == "doc_123"
         assert result.old_confidence == 0.5
-        assert result.new_confidence == 0.5 + DEFAULT_SUCCESS_ADJUSTMENT
+        assert result.new_confidence == 0.5 + SUCCESS_ADJUSTMENT
         assert result.was_helpful is True
         mock_store.update_confidence.assert_called_once()
 
@@ -118,7 +118,7 @@ class TestValidationLoop:
         result = await validation_loop.record_usage("doc_123", was_helpful=False)
 
         expected_new_confidence = (
-            0.5 - DEFAULT_SUCCESS_ADJUSTMENT * DEFAULT_FAILURE_MULTIPLIER
+            0.5 - SUCCESS_ADJUSTMENT * DEFAULT_FAILURE_MULTIPLIER
         )
         assert result.success is True
         assert result.new_confidence == expected_new_confidence
