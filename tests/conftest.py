@@ -13,7 +13,6 @@ Usage:
 import tempfile
 from collections.abc import Generator
 from pathlib import Path
-from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
