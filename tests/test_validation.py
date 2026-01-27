@@ -6,6 +6,7 @@ Tests the validation loop system including:
 - GoldenRules management
 """
 
+import time
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
@@ -37,23 +38,43 @@ from theo.constants import (
 
 @pytest.fixture
 def mock_store():
-    """Create a mock ChromaStore for testing."""
+    """Create a mock SQLiteStore for testing.
+
+    SQLiteStore API:
+    - get_memory(id) -> dict | None
+    - update_memory(id, **fields) -> bool
+    - list_memories(namespace, memory_type, limit) -> list[dict]
+    """
     store = MagicMock()
-    # Default get behavior returns empty
-    store.get.return_value = {"ids": [], "documents": [], "metadatas": []}
-    store.update_confidence.return_value = True
+    # Default get_memory behavior returns None (not found)
+    store.get_memory.return_value = None
+    # Default update_memory returns True (success)
+    store.update_memory.return_value = True
+    # Default list_memories returns empty list
+    store.list_memories.return_value = []
     return store
 
 
 @pytest.fixture
-def sample_doc_metadata():
-    """Sample document metadata for testing."""
+def sample_memory():
+    """Sample memory dict for testing (SQLiteStore format)."""
+    now = time.time()
     return {
-        "confidence": 0.5,
-        "doc_type": "pattern",
+        "id": "doc_123",
+        "content": "test content",
+        "content_hash": "abc123",
+        "memory_type": "pattern",
         "namespace": "test",
-        "created_at": datetime.now().isoformat(),
-        "accessed_at": datetime.now().isoformat(),
+        "confidence": 0.5,
+        "importance": 0.5,
+        "source_file": None,
+        "chunk_index": 0,
+        "start_line": None,
+        "end_line": None,
+        "created_at": now,
+        "last_accessed": now,
+        "access_count": 0,
+        "tags": None,
     }
 
 
@@ -85,15 +106,11 @@ class TestValidationLoop:
 
     @pytest.mark.asyncio
     async def test_record_usage_helpful_increases_confidence(
-        self, validation_loop, mock_store, sample_doc_metadata
+        self, validation_loop, mock_store, sample_memory
     ):
         """Helpful usage should increase confidence."""
-        # Setup mock to return document with confidence 0.5
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test content"],
-            "metadatas": [sample_doc_metadata],
-        }
+        # Setup mock to return memory with confidence 0.5
+        mock_store.get_memory.return_value = sample_memory.copy()
 
         result = await validation_loop.record_usage("doc_123", was_helpful=True)
 
@@ -102,18 +119,14 @@ class TestValidationLoop:
         assert result.old_confidence == 0.5
         assert result.new_confidence == 0.5 + SUCCESS_ADJUSTMENT
         assert result.was_helpful is True
-        mock_store.update_confidence.assert_called_once()
+        mock_store.update_memory.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_record_usage_not_helpful_decreases_confidence(
-        self, validation_loop, mock_store, sample_doc_metadata
+        self, validation_loop, mock_store, sample_memory
     ):
         """Unhelpful usage should decrease confidence with penalty multiplier."""
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test content"],
-            "metadatas": [sample_doc_metadata],
-        }
+        mock_store.get_memory.return_value = sample_memory.copy()
 
         result = await validation_loop.record_usage("doc_123", was_helpful=False)
 
@@ -127,7 +140,7 @@ class TestValidationLoop:
     @pytest.mark.asyncio
     async def test_record_usage_document_not_found(self, validation_loop, mock_store):
         """Should return error for non-existent document."""
-        mock_store.get.return_value = {"ids": [], "documents": [], "metadatas": []}
+        mock_store.get_memory.return_value = None
 
         result = await validation_loop.record_usage("nonexistent", was_helpful=True)
 
@@ -136,14 +149,12 @@ class TestValidationLoop:
 
     @pytest.mark.asyncio
     async def test_record_usage_confidence_capped_at_max(
-        self, validation_loop, mock_store
+        self, validation_loop, mock_store, sample_memory
     ):
         """Confidence should not exceed 1.0."""
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test"],
-            "metadatas": [{"confidence": 0.95}],
-        }
+        memory = sample_memory.copy()
+        memory["confidence"] = 0.95
+        mock_store.get_memory.return_value = memory
 
         result = await validation_loop.record_usage("doc_123", was_helpful=True)
 
@@ -151,14 +162,12 @@ class TestValidationLoop:
 
     @pytest.mark.asyncio
     async def test_record_usage_confidence_capped_at_min(
-        self, validation_loop, mock_store
+        self, validation_loop, mock_store, sample_memory
     ):
         """Confidence should not go below 0.0."""
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test"],
-            "metadatas": [{"confidence": 0.1}],
-        }
+        memory = sample_memory.copy()
+        memory["confidence"] = 0.1
+        mock_store.get_memory.return_value = memory
 
         result = await validation_loop.record_usage("doc_123", was_helpful=False)
 
@@ -166,15 +175,14 @@ class TestValidationLoop:
 
     @pytest.mark.asyncio
     async def test_record_usage_promotes_to_golden_rule(
-        self, validation_loop, mock_store
+        self, validation_loop, mock_store, sample_memory
     ):
         """Should detect promotion eligibility when confidence reaches threshold."""
         # Start at 0.85, will go to 0.95 with success
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test"],
-            "metadatas": [{"confidence": 0.85, "doc_type": "pattern"}],
-        }
+        memory = sample_memory.copy()
+        memory["confidence"] = 0.85
+        memory["memory_type"] = "pattern"
+        mock_store.get_memory.return_value = memory
 
         result = await validation_loop.record_usage("doc_123", was_helpful=True)
 
@@ -184,15 +192,26 @@ class TestValidationLoop:
     @pytest.mark.asyncio
     async def test_decay_unused_skips_golden_rules(self, validation_loop, mock_store):
         """Decay should skip golden rules."""
-        old_time = (datetime.now() - timedelta(days=60)).isoformat()
-        mock_store.get.return_value = {
-            "ids": ["golden_1", "normal_1"],
-            "documents": ["golden content", "normal content"],
-            "metadatas": [
-                {"confidence": 0.95, "doc_type": "golden_rule", "accessed_at": old_time},
-                {"confidence": 0.5, "doc_type": "pattern", "accessed_at": old_time},
-            ],
+        old_time = time.time() - (60 * 24 * 60 * 60)  # 60 days ago
+
+        golden_memory = {
+            "id": "golden_1",
+            "content": "golden content",
+            "memory_type": "golden_rule",
+            "confidence": 0.95,
+            "last_accessed": old_time,
+            "created_at": old_time,
         }
+        normal_memory = {
+            "id": "normal_1",
+            "content": "normal content",
+            "memory_type": "pattern",
+            "confidence": 0.5,
+            "last_accessed": old_time,
+            "created_at": old_time,
+        }
+
+        mock_store.list_memories.return_value = [golden_memory, normal_memory]
 
         result = await validation_loop.decay_unused(days_threshold=30)
 
@@ -204,17 +223,27 @@ class TestValidationLoop:
     @pytest.mark.asyncio
     async def test_decay_unused_respects_threshold(self, validation_loop, mock_store):
         """Decay should skip recently accessed documents."""
-        recent_time = datetime.now().isoformat()
-        old_time = (datetime.now() - timedelta(days=60)).isoformat()
+        recent_time = time.time()
+        old_time = time.time() - (60 * 24 * 60 * 60)  # 60 days ago
 
-        mock_store.get.return_value = {
-            "ids": ["recent_1", "old_1"],
-            "documents": ["recent content", "old content"],
-            "metadatas": [
-                {"confidence": 0.5, "doc_type": "pattern", "accessed_at": recent_time},
-                {"confidence": 0.5, "doc_type": "pattern", "accessed_at": old_time},
-            ],
+        recent_memory = {
+            "id": "recent_1",
+            "content": "recent content",
+            "memory_type": "pattern",
+            "confidence": 0.5,
+            "last_accessed": recent_time,
+            "created_at": recent_time,
         }
+        old_memory = {
+            "id": "old_1",
+            "content": "old content",
+            "memory_type": "pattern",
+            "confidence": 0.5,
+            "last_accessed": old_time,
+            "created_at": old_time,
+        }
+
+        mock_store.list_memories.return_value = [recent_memory, old_memory]
 
         result = await validation_loop.decay_unused(days_threshold=30)
 
@@ -223,13 +252,11 @@ class TestValidationLoop:
         assert "recent_1" not in result.decayed_ids
 
     @pytest.mark.asyncio
-    async def test_get_confidence(self, validation_loop, mock_store):
+    async def test_get_confidence(self, validation_loop, mock_store, sample_memory):
         """Should return confidence for existing document."""
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test"],
-            "metadatas": [{"confidence": 0.75}],
-        }
+        memory = sample_memory.copy()
+        memory["confidence"] = 0.75
+        mock_store.get_memory.return_value = memory
 
         confidence = await validation_loop.get_confidence("doc_123")
 
@@ -238,7 +265,7 @@ class TestValidationLoop:
     @pytest.mark.asyncio
     async def test_get_confidence_not_found(self, validation_loop, mock_store):
         """Should return None for non-existent document."""
-        mock_store.get.return_value = {"ids": [], "documents": [], "metadatas": []}
+        mock_store.get_memory.return_value = None
 
         confidence = await validation_loop.get_confidence("nonexistent")
 
@@ -246,15 +273,12 @@ class TestValidationLoop:
 
     def test_get_low_confidence_candidates(self, validation_loop, mock_store):
         """Should return documents below confidence threshold."""
-        mock_store.get.return_value = {
-            "ids": ["low_1", "high_1", "low_2"],
-            "documents": ["", "", ""],
-            "metadatas": [
-                {"confidence": 0.1},
-                {"confidence": 0.8},
-                {"confidence": 0.05},
-            ],
-        }
+        memories = [
+            {"id": "low_1", "confidence": 0.1},
+            {"id": "high_1", "confidence": 0.8},
+            {"id": "low_2", "confidence": 0.05},
+        ]
+        mock_store.list_memories.return_value = memories
 
         candidates = validation_loop.get_low_confidence_candidates(
             threshold=LOW_CONFIDENCE_THRESHOLD
@@ -451,31 +475,37 @@ class TestGoldenRules:
 
     def test_is_golden_rule_by_type(self, golden_rules, mock_store):
         """Should identify golden rule by type."""
-        mock_store.get.return_value = {
-            "ids": ["doc_1"],
-            "documents": ["test"],
-            "metadatas": [{"doc_type": "golden_rule", "confidence": 0.5}],
+        memory = {
+            "id": "doc_1",
+            "content": "test",
+            "memory_type": "golden_rule",
+            "confidence": 0.5,
         }
+        mock_store.get_memory.return_value = memory
 
         assert golden_rules.is_golden_rule("doc_1") is True
 
     def test_is_golden_rule_by_confidence(self, golden_rules, mock_store):
         """Should identify golden rule by high confidence."""
-        mock_store.get.return_value = {
-            "ids": ["doc_1"],
-            "documents": ["test"],
-            "metadatas": [{"doc_type": "pattern", "confidence": 0.95}],
+        memory = {
+            "id": "doc_1",
+            "content": "test",
+            "memory_type": "pattern",
+            "confidence": 0.95,
         }
+        mock_store.get_memory.return_value = memory
 
         assert golden_rules.is_golden_rule("doc_1") is True
 
     def test_is_not_golden_rule(self, golden_rules, mock_store):
         """Should return False for non-golden rule."""
-        mock_store.get.return_value = {
-            "ids": ["doc_1"],
-            "documents": ["test"],
-            "metadatas": [{"doc_type": "pattern", "confidence": 0.5}],
+        memory = {
+            "id": "doc_1",
+            "content": "test",
+            "memory_type": "pattern",
+            "confidence": 0.5,
         }
+        mock_store.get_memory.return_value = memory
 
         assert golden_rules.is_golden_rule("doc_1") is False
 
@@ -511,27 +541,33 @@ class TestGoldenRules:
     @pytest.mark.asyncio
     async def test_demote_reduces_confidence(self, golden_rules, mock_store):
         """Demotion should reduce confidence."""
-        mock_store.get.return_value = {
-            "ids": ["doc_1"],
-            "documents": ["test"],
-            "metadatas": [{"doc_type": "golden_rule", "confidence": 0.95}],
+        memory = {
+            "id": "doc_1",
+            "content": "test",
+            "memory_type": "golden_rule",
+            "confidence": 0.95,
+            "tags": None,
         }
+        mock_store.get_memory.return_value = memory
 
         result = await golden_rules.demote("doc_1", reason="Failed multiple times")
 
         assert result.success is True
         assert result.demoted is True
         assert result.new_confidence == 0.7  # Default demotion confidence
-        mock_store.update_confidence.assert_called_once_with("doc_1", 0.7)
+        mock_store.update_memory.assert_called_once_with("doc_1", confidence=0.7)
 
     @pytest.mark.asyncio
     async def test_demote_non_golden_rule(self, golden_rules, mock_store):
         """Should not demote non-golden rule."""
-        mock_store.get.return_value = {
-            "ids": ["doc_1"],
-            "documents": ["test"],
-            "metadatas": [{"doc_type": "pattern", "confidence": 0.5}],
+        memory = {
+            "id": "doc_1",
+            "content": "test",
+            "memory_type": "pattern",
+            "confidence": 0.5,
+            "tags": None,
         }
+        mock_store.get_memory.return_value = memory
 
         result = await golden_rules.demote("doc_1", reason="test")
 
@@ -540,21 +576,42 @@ class TestGoldenRules:
 
     def test_get_all_returns_golden_rules(self, golden_rules, mock_store):
         """Should return all golden rules."""
-        # First call for type filter
-        mock_store.get.side_effect = [
-            {
-                "ids": ["golden_1"],
-                "documents": ["golden content"],
-                "metadatas": [{"doc_type": "golden_rule", "confidence": 0.9}],
-            },
-            {
-                "ids": ["golden_1", "high_conf_1"],
-                "documents": ["golden content", "high conf content"],
-                "metadatas": [
-                    {"doc_type": "golden_rule", "confidence": 0.9},
-                    {"doc_type": "pattern", "confidence": 0.95},
-                ],
-            },
+        now = time.time()
+
+        # First call for type filter (golden_rule type)
+        # Second call for all memories (to find high-confidence ones)
+        mock_store.list_memories.side_effect = [
+            [
+                {
+                    "id": "golden_1",
+                    "content": "golden content",
+                    "memory_type": "golden_rule",
+                    "confidence": 0.9,
+                    "created_at": now,
+                    "access_count": 0,
+                    "tags": None,
+                },
+            ],
+            [
+                {
+                    "id": "golden_1",
+                    "content": "golden content",
+                    "memory_type": "golden_rule",
+                    "confidence": 0.9,
+                    "created_at": now,
+                    "access_count": 0,
+                    "tags": None,
+                },
+                {
+                    "id": "high_conf_1",
+                    "content": "high conf content",
+                    "memory_type": "pattern",
+                    "confidence": 0.95,
+                    "created_at": now,
+                    "access_count": 0,
+                    "tags": None,
+                },
+            ],
         ]
 
         rules = golden_rules.get_all()
@@ -565,20 +622,40 @@ class TestGoldenRules:
 
     def test_get_stats(self, golden_rules, mock_store):
         """Should return statistics about golden rules."""
-        mock_store.get.side_effect = [
-            {
-                "ids": ["g1"],
-                "documents": ["test"],
-                "metadatas": [{"doc_type": "golden_rule", "confidence": 0.95}],
-            },
-            {
-                "ids": ["g1", "g2"],
-                "documents": ["test", "test2"],
-                "metadatas": [
-                    {"doc_type": "golden_rule", "confidence": 0.95},
-                    {"doc_type": "pattern", "confidence": 0.92},
-                ],
-            },
+        now = time.time()
+
+        mock_store.list_memories.side_effect = [
+            [
+                {
+                    "id": "g1",
+                    "content": "test",
+                    "memory_type": "golden_rule",
+                    "confidence": 0.95,
+                    "created_at": now,
+                    "access_count": 0,
+                    "tags": None,
+                },
+            ],
+            [
+                {
+                    "id": "g1",
+                    "content": "test",
+                    "memory_type": "golden_rule",
+                    "confidence": 0.95,
+                    "created_at": now,
+                    "access_count": 0,
+                    "tags": None,
+                },
+                {
+                    "id": "g2",
+                    "content": "test2",
+                    "memory_type": "pattern",
+                    "confidence": 0.92,
+                    "created_at": now,
+                    "access_count": 0,
+                    "tags": None,
+                },
+            ],
         ]
 
         # Record a failure for g1
@@ -599,17 +676,13 @@ class TestValidationIntegration:
     """Integration tests for validation components."""
 
     @pytest.mark.asyncio
-    async def test_feedback_to_validation_flow(self, mock_store):
+    async def test_feedback_to_validation_flow(self, mock_store, sample_memory):
         """Test flow from feedback collection to validation update."""
         # Setup
         collector = FeedbackCollector()
         loop = ValidationLoop(mock_store)
 
-        mock_store.get.return_value = {
-            "ids": ["doc_123"],
-            "documents": ["test"],
-            "metadatas": [{"confidence": 0.5, "doc_type": "pattern"}],
-        }
+        mock_store.get_memory.return_value = sample_memory.copy()
 
         # Collect feedback
         for _ in range(3):
@@ -641,11 +714,14 @@ class TestValidationIntegration:
         loop = ValidationLoop(mock_store)
 
         # Setup golden rule document
-        mock_store.get.return_value = {
-            "ids": ["golden_1"],
-            "documents": ["golden content"],
-            "metadatas": [{"doc_type": "golden_rule", "confidence": 0.92}],
+        golden_memory = {
+            "id": "golden_1",
+            "content": "golden content",
+            "memory_type": "golden_rule",
+            "confidence": 0.92,
+            "tags": None,
         }
+        mock_store.get_memory.return_value = golden_memory
 
         # Simulate failures
         for _ in range(DEMOTION_FAILURE_THRESHOLD):
