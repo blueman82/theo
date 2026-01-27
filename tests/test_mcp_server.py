@@ -59,9 +59,15 @@ def mock_store():
     store.count_edges.return_value = 5
     store.list_memories.return_value = [
         {"id": "1", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
-        {"id": "2", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
-        {"id": "3", "memory_type": "memory", "source_file": None, "namespace": "default"},
-        {"id": "4", "memory_type": "document", "source_file": "/path/to/file2.py", "namespace": "project1"},
+        {"id": "2", "memory_type": "document", "source_file": "/path/to/file2.py", "namespace": "default"},
+        {"id": "3", "memory_type": "document", "source_file": "/path/to/file3.py", "namespace": "default"},
+        {"id": "4", "memory_type": "document", "source_file": "/path/to/file4.md", "namespace": "project1"},
+        {"id": "5", "memory_type": "document", "source_file": "/path/to/file5.txt", "namespace": "project1"},
+        {"id": "6", "memory_type": "memory", "source_file": None, "namespace": "default"},
+        {"id": "7", "memory_type": "memory", "source_file": None, "namespace": "default"},
+        {"id": "8", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
+        {"id": "9", "memory_type": "document", "source_file": "/path/to/file2.py", "namespace": "project1"},
+        {"id": "10", "memory_type": "document", "source_file": "/path/to/file3.py", "namespace": "default"},
     ]
     # Mock methods used by IndexingTools
     store.get_by_hash.return_value = None
