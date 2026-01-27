@@ -33,7 +33,7 @@ import signal
 
 import httpx
 
-# Limit concurrent store writes to avoid overwhelming ChromaDB
+# Limit concurrent store writes to avoid overwhelming SQLite
 MAX_CONCURRENT_STORE_WRITES = 10
 
 if TYPE_CHECKING:
