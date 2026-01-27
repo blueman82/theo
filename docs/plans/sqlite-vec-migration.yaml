@@ -1009,11 +1009,20 @@ plan:
           Systematic find-replace in all tool files.
         key_points:
           - point: "Update memory_tools.py"
-            details: "memory_store, memory_recall, memory_forget"
+            details: "memory_store→add_memory(), memory_recall→search_hybrid(), memory_forget→delete_memory()"
             reference: "src/theo/tools/memory_tools.py"
           - point: "Update query_tools.py"
-            details: "search() uses search_hybrid()"
+            details: "search() uses SQLiteStore.search_hybrid()"
             reference: "src/theo/tools/query_tools.py"
+          - point: "Update indexing_tools.py"
+            details: "index operations use SQLiteStore.add_memory()"
+            reference: "src/theo/tools/indexing_tools.py"
+          - point: "Update management_tools.py"
+            details: "get_stats uses count_memories() and list_memories()"
+            reference: "src/theo/tools/management_tools.py"
+          - point: "Update type hints in all 4 files"
+            details: "Change store parameter from ChromaStore to SQLiteStore"
+            reference: "src/theo/tools/"
 
       code_quality:
         python:
