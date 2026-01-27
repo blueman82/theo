@@ -97,26 +97,3 @@ class EmbeddingProvider(Protocol):
         Implementations should be idempotent (safe to call multiple times).
         """
         ...
-
-    async def embed_batch(
-        self, texts: list[str], is_query: bool = False
-    ) -> list[list[float]]:
-        """Async batch embedding for daemon workers.
-
-        This method provides an async interface for the daemon's EmbeddingBatcher.
-        Implementations should run embedding operations in a thread pool to avoid
-        blocking the event loop.
-
-        Args:
-            texts: List of texts to embed.
-            is_query: If True, apply query prefix (for search queries).
-                      If False, embed as documents (no prefix).
-
-        Returns:
-            List of embedding vectors.
-
-        Raises:
-            EmbeddingError: If embedding generation fails.
-            ValueError: If texts list is empty.
-        """
-        ...
