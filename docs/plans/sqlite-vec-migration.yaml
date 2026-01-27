@@ -873,11 +873,12 @@ plan:
       depends_on: [9]
 
       success_criteria:
-        - "ChromaStore imports replaced with SQLiteStore in all files"
-        - "memory_tools.py uses SQLiteStore for memory_store, memory_recall, memory_forget"
-        - "query_tools.py search() uses SQLiteStore.search_hybrid()"
-        - "indexing_tools.py uses SQLiteStore.add_memory()"
-        - "management_tools.py uses SQLiteStore stats methods"
+        - "ChromaStore imports replaced with SQLiteStore in all 4 files"
+        - "memory_tools.py: memory_store uses add_memory(), memory_recall uses search_hybrid(), memory_forget uses delete_memory()"
+        - "query_tools.py: search() uses SQLiteStore.search_hybrid()"
+        - "indexing_tools.py: index operations use SQLiteStore.add_memory()"
+        - "management_tools.py: get_stats uses count_memories() and list_memories()"
+        - "Type hints updated from ChromaStore to SQLiteStore"
         - "No TODO comments"
 
       test_commands:
