@@ -94,7 +94,7 @@ class IndexingTools:
         """Index a single document file.
 
         Reads the file, chunks it using the appropriate chunker,
-        generates embeddings via the daemon, and stores in ChromaDB.
+        generates embeddings via the daemon, and stores in SQLiteStore.
 
         Args:
             file_path: Absolute or relative path to the file to index
