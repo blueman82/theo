@@ -396,7 +396,7 @@ async def run_haiku_check() -> MonitorResult | None:
         monitor = Monitor(store, settings, use_claude_cli=True)
         return await monitor.haiku_check(namespace=None)
     finally:
-        await store.close()
+        store.close()
 
 
 async def run_opus_analysis(issues_file: str) -> None:
