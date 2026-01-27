@@ -544,7 +544,7 @@ class IndexQueue:
 
     The queue operates in two phases:
     1. enqueue(): Immediate INSERT, no embedding (fast)
-    2. Worker: dequeue_batch() -> embed -> store to ChromaDB -> mark_indexed()
+    2. Worker: dequeue_batch() -> embed -> store to SQLite -> mark_indexed()
     """
 
     def __init__(self, db_path: Path | None = None) -> None:
