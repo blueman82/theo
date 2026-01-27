@@ -1229,11 +1229,13 @@ plan:
       depends_on: [11, 13]
 
       success_criteria:
-        - "chromadb removed from dependencies"
-        - "chromadb.* removed from mypy overrides"
-        - "uv sync succeeds"
-        - "All imports work without chromadb"
-        - "All tests pass"
+        - "chromadb>=0.4.0 removed from [project].dependencies"
+        - "chromadb.* removed from [[tool.mypy.overrides]] module list"
+        - "grep -r 'chromadb' src/theo/ returns no matches"
+        - "grep -r 'ChromaStore' src/theo/ returns no matches"
+        - "uv sync --dev succeeds without chromadb"
+        - "uv run python -c 'from theo.storage import SQLiteStore' succeeds"
+        - "uv run pytest tests/ -v passes all tests"
 
       test_commands:
         - "cd /Users/harrison/Documents/Github/theo && uv sync --dev"
