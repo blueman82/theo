@@ -263,8 +263,7 @@ class PDFChunker(AbstractChunker):
             else:
                 metadata["page_start"] = pages[0]
                 metadata["page_end"] = pages[-1]
-                # Convert pages list to comma-separated string for ChromaDB compatibility
-                # ChromaDB doesn't support list values in metadata
+                # Convert pages list to comma-separated string for storage
                 metadata["pages"] = ",".join(str(p) for p in pages)
 
         # For PDFs, use page numbers as logical line references
