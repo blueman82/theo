@@ -2,6 +2,16 @@
 
 All notable changes to Theo will be documented in this file.
 
+## [0.2.1] - 2026-01-28
+
+### Fixed
+- Fixed `memory_recall` namespace filtering returning 0 results due to sqlite-vec KNN applying LIMIT before WHERE filter
+- Added 50x fetch multiplier in `search_hybrid` when namespace filter is present
+
+### Changed
+- Consolidated `get_edges_from`/`get_edges_to` into shared `_query_edges` helper (DRY refactor)
+- Removed deprecated legacy parameters from `HybridStore.create()` (chroma_path, collection_name, ephemeral)
+
 ## [Unreleased] - Data Migration from DocVec/Recall
 
 ### Migration Planning Session (2026-01-25)
