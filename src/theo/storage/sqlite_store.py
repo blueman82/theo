@@ -1384,7 +1384,10 @@ class SQLiteStore:
             fetch_count = n_results * 3
 
             # Perform both searches with filters
-            vector_results = self.search_vector(embedding, n_results=fetch_count, where=where)
+            # Note: sqlite-vec KNN doesn't support pre-filtering, so we fetch more results
+            # and rely on post-filtering. Fetch 50x more when filtering by namespace.
+            vec_fetch = fetch_count * 50 if where else fetch_count
+            vector_results = self.search_vector(embedding, n_results=vec_fetch, where=where)
             fts_results = self.search_fts(query, n_results=fetch_count, where=where)
 
             # Build combined scores using RRF
