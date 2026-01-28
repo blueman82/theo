@@ -377,6 +377,32 @@ class SQLiteStore:
             self._conn.rollback()
             raise SQLiteStoreError(f"Failed to add edges batch: {e}") from e
 
+    def _query_edges(
+        self,
+        field: str,
+        value: str,
+        edge_type: Optional[str] = None,
+    ) -> list[dict[str, Any]]:
+        """Query edges by a specific field (source_id or target_id).
+
+        Args:
+            field: Field to filter by ('source_id' or 'target_id')
+            value: Value to match
+            edge_type: Optional filter by edge type
+
+        Returns:
+            List of edge dicts
+        """
+        cursor = self._conn.cursor()
+        base_query = """
+            SELECT id, source_id, target_id, edge_type, weight, created_at, metadata
+            FROM edges WHERE {} = ?"""
+        if edge_type:
+            cursor.execute(base_query.format(field) + " AND edge_type = ?", (value, edge_type))
+        else:
+            cursor.execute(base_query.format(field), (value,))
+        return [self._row_to_edge(row) for row in cursor.fetchall()]
+
     def get_edges_from(
         self,
         source_id: str,
@@ -395,29 +421,7 @@ class SQLiteStore:
             SQLiteStoreError: If query fails
         """
         try:
-            cursor = self._conn.cursor()
-
-            if edge_type:
-                cursor.execute(
-                    """
-                    SELECT id, source_id, target_id, edge_type, weight, created_at, metadata
-                    FROM edges
-                    WHERE source_id = ? AND edge_type = ?
-                    """,
-                    (source_id, edge_type),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT id, source_id, target_id, edge_type, weight, created_at, metadata
-                    FROM edges
-                    WHERE source_id = ?
-                    """,
-                    (source_id,),
-                )
-
-            return [self._row_to_edge(row) for row in cursor.fetchall()]
-
+            return self._query_edges("source_id", source_id, edge_type)
         except Exception as e:
             raise SQLiteStoreError(f"Failed to get edges: {e}") from e
 
@@ -439,29 +443,7 @@ class SQLiteStore:
             SQLiteStoreError: If query fails
         """
         try:
-            cursor = self._conn.cursor()
-
-            if edge_type:
-                cursor.execute(
-                    """
-                    SELECT id, source_id, target_id, edge_type, weight, created_at, metadata
-                    FROM edges
-                    WHERE target_id = ? AND edge_type = ?
-                    """,
-                    (target_id, edge_type),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT id, source_id, target_id, edge_type, weight, created_at, metadata
-                    FROM edges
-                    WHERE target_id = ?
-                    """,
-                    (target_id,),
-                )
-
-            return [self._row_to_edge(row) for row in cursor.fetchall()]
-
+            return self._query_edges("target_id", target_id, edge_type)
         except Exception as e:
             raise SQLiteStoreError(f"Failed to get edges: {e}") from e
 
