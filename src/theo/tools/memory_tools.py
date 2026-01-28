@@ -1338,12 +1338,13 @@ class MemoryTools:
             limit = min(limit, 1000)
 
             # Use SQLiteStore.list_memories directly
-            # Note: order_by and descending params not supported by SQLiteStore
             result = self._store.list_memories(
                 namespace=namespace,
                 memory_type=memory_type,
                 limit=limit,
                 offset=offset,
+                order_by=order_by,
+                descending=descending,
             )
 
             # Convert to expected response format
