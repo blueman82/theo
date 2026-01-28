@@ -324,25 +324,26 @@ class MemoryTools:
                     "error": "No query embedding returned",
                 }
 
-            # Build where filter for post-search filtering
-            # SQLiteStore.search_hybrid doesn't support where filters directly
+            # Build where filter for search_hybrid
+            where_filter: dict | None = None
+            if namespace or memory_type:
+                where_filter = {}
+                if namespace:
+                    where_filter["namespace"] = namespace
+                if memory_type:
+                    where_filter["memory_type"] = memory_type
 
-            # Search using SQLiteStore's hybrid search (vector + FTS)
+            # Search using SQLiteStore's hybrid search (vector + FTS) with filters
             results = self._store.search_hybrid(
                 embedding=query_embedding,
                 query=query,
-                n_results=n_results * 2,  # Fetch extra for filtering
+                n_results=n_results * 2,  # Fetch extra for importance/confidence filtering
+                where=where_filter,
             )
 
-            # Filter results by namespace, memory_type, importance, and confidence
+            # Filter results by importance and confidence (namespace/type already filtered)
             memories_data = []
             for i, result in enumerate(results):
-                # Apply namespace filter
-                if namespace and result.namespace != namespace:
-                    continue
-                # Apply memory_type filter
-                if memory_type and result.memory_type != memory_type:
-                    continue
                 # Apply importance filter
                 if min_importance is not None and result.importance < min_importance:
                     continue
