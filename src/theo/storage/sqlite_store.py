@@ -1029,6 +1029,8 @@ class SQLiteStore:
         memory_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        order_by: str = "created_at",
+        descending: bool = True,
     ) -> list[dict]:
         """List memories with optional filters and pagination.
 
@@ -1037,6 +1039,8 @@ class SQLiteStore:
             memory_type: Optional memory type filter
             limit: Maximum number of results
             offset: Number of results to skip
+            order_by: Column to sort by (default: created_at)
+            descending: Sort descending (default: True)
 
         Returns:
             List of memory dicts
@@ -1058,6 +1062,11 @@ class SQLiteStore:
 
             where_clause = " WHERE " + " AND ".join(conditions) if conditions else ""
 
+            # Whitelist allowed columns to prevent SQL injection
+            allowed_columns = {"created_at", "importance", "confidence", "last_accessed"}
+            sort_col = order_by if order_by in allowed_columns else "created_at"
+            sort_dir = "DESC" if descending else "ASC"
+
             cursor.execute(
                 f"""
                 SELECT id, content, content_hash, memory_type, namespace,
@@ -1066,7 +1075,7 @@ class SQLiteStore:
                        access_count, tags
                 FROM memories
                 {where_clause}
-                ORDER BY created_at DESC
+                ORDER BY {sort_col} {sort_dir}
                 LIMIT ? OFFSET ?
                 """,
                 params + [limit, offset],
