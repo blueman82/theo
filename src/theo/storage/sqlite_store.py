@@ -1360,7 +1360,6 @@ class SQLiteStore:
         query: str,
         n_results: int = 5,
         vector_weight: float = 0.7,
-        where: dict | None = None,
     ) -> list[SearchResult]:
         """Combine vector and FTS results with weighted scoring.
 
@@ -1372,7 +1371,6 @@ class SQLiteStore:
             query: Search query string
             n_results: Number of results to return
             vector_weight: Weight for vector scores (0.0-1.0)
-            where: Optional filter dict (namespace, memory_type)
 
         Returns:
             List of SearchResult sorted by combined score
@@ -1383,9 +1381,9 @@ class SQLiteStore:
             # Get more results from each search to have overlap for fusion
             fetch_count = n_results * 3
 
-            # Perform both searches with filters
-            vector_results = self.search_vector(embedding, n_results=fetch_count, where=where)
-            fts_results = self.search_fts(query, n_results=fetch_count, where=where)
+            # Perform both searches
+            vector_results = self.search_vector(embedding, n_results=fetch_count)
+            fts_results = self.search_fts(query, n_results=fetch_count)
 
             # Build combined scores using RRF
             # RRF score = sum(1 / (k + rank)) where k=60 is typical
