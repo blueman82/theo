@@ -110,8 +110,8 @@ src/theo/
 │   ├── operations.py    # store, recall, relate, forget, validate
 │   └── validation.py    # Contradiction detection, confidence
 ├── storage/
-│   ├── chroma_store.py  # ChromaDB vector storage
-│   ├── sqlite.py        # SQLite metadata (memory system)
+│   ├── sqlite_store.py  # SQLite + sqlite-vec vector storage
+│   ├── types.py         # Storage type definitions
 │   └── hybrid.py        # Coordinated storage layer
 └── embedding/
     ├── provider.py      # Abstract embedding provider
@@ -127,11 +127,11 @@ src/theo/
 2. File extension → Appropriate chunker selected
 3. Content → Chunker splits into semantically meaningful chunks
 4. Chunks → Embedded via MLX/Ollama
-5. Chunks + Embeddings → Stored in ChromaDB
+5. Chunks + Embeddings → Stored in SQLite (sqlite-vec)
 
 **Memory Operations:**
 1. Memory content → Embedded and deduplicated
-2. Storage → SQLite (metadata) + ChromaDB (vectors)
+2. Storage → SQLite with sqlite-vec (unified storage)
 3. Recall → Semantic search with optional graph expansion
 4. Validation → Confidence adjusted through use
 
@@ -173,13 +173,13 @@ TRY → BREAK → ANALYZE → LEARN
 - **Integration tests**: Test full pipelines
 - **Fixtures**: Use pytest fixtures for shared test setup
   - `mock_embedder`: Returns fake embeddings without MLX/Ollama
-  - `temp_chroma`: In-memory ChromaDB for isolated tests
+  - `temp_sqlite`: Temporary SQLite database for isolated tests
   - `temp_dir`: Temporary directories for file operations
 
 Example pattern:
 ```python
-def test_something(mock_embedder, temp_chroma):
-    indexer = Indexer(mock_embedder, temp_chroma)
+def test_something(mock_embedder, temp_sqlite):
+    store = SQLiteStore(temp_sqlite)
     # Test without external dependencies
 ```
 
@@ -191,8 +191,7 @@ Settings via environment variables with `THEO_` prefix:
 |----------|---------|-------------|
 | THEO_EMBEDDING_BACKEND | mlx | Embedding backend: `mlx` or `ollama` |
 | THEO_MLX_MODEL | mlx-community/mxbai-embed-large-v1 | MLX model |
-| THEO_CHROMA_PATH | ~/.theo/chroma_db | ChromaDB storage |
-| THEO_SQLITE_PATH | ~/.theo/theo.db | SQLite database |
+| THEO_SQLITE_PATH | ~/.theo/theo.db | SQLite database (vectors + metadata) |
 | THEO_LOG_LEVEL | INFO | Logging level |
 
 ## File Paths and Structure

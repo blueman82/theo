@@ -4,7 +4,7 @@ This document provides detailed specifications for all MCP tools exposed by the 
 
 ## Overview
 
-Theo exposes 25 tools organized into seven categories:
+Theo exposes 27 tools organized into seven categories:
 
 **Document Indexing Tools**
 1. `index_file` - Index a single document

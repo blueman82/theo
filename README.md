@@ -52,10 +52,10 @@
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- Python 3.13 or higher
 - [uv](https://docs.astral.sh/uv/) package manager (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 - Apple Silicon Mac (for MLX backend, default) OR [Ollama](https://ollama.ai) installed
-- 2GB+ free disk space for ChromaDB and model cache
+- 1GB+ free disk space for SQLite database and model cache
 
 ### Installation
 
@@ -83,7 +83,7 @@ Add to your MCP config:
       "args": ["run", "python", "-m", "theo"],
       "cwd": "/path/to/theo",
       "env": {
-        "THEO_DB_PATH": "~/.theo/chroma_db"
+        "THEO_SQLITE_PATH": "~/.theo/theo.db"
       }
     }
   }
@@ -194,8 +194,7 @@ Configuration via CLI arguments (highest priority) or environment variables with
 | `THEO_OLLAMA_HOST` | `--ollama-host` | `http://localhost:11434` | Ollama server URL |
 | `THEO_OLLAMA_MODEL` | `--ollama-model` | `nomic-embed-text` | Ollama model |
 | `THEO_OLLAMA_TIMEOUT` | `--ollama-timeout` | `30` | Timeout in seconds |
-| `THEO_DB_PATH` | `--db-path` | `~/.theo/chroma_db` | ChromaDB storage path |
-| `THEO_COLLECTION` | `--collection` | `documents` | Collection name |
+| `THEO_SQLITE_PATH` | `--sqlite-path` | `~/.theo/theo.db` | SQLite database path |
 | `THEO_LOG_LEVEL` | `--log-level` | `INFO` | Logging level |
 
 [↑ Back to top](#table-of-contents)
@@ -204,7 +203,7 @@ Configuration via CLI arguments (highest priority) or environment variables with
 
 Theo combines three key capabilities:
 
-1. **Document Indexing Pipeline**: File → Chunker → Embedder → ChromaDB
+1. **Document Indexing Pipeline**: File → Chunker → Embedder → SQLite (sqlite-vec)
 2. **Memory System**: Store → Validate → Recall with confidence scoring
 3. **Daemon Service**: Non-blocking IPC for embedding operations
 
@@ -231,7 +230,7 @@ Theo combines three key capabilities:
               ┌──────────────────────┼──────────────────────┐
               │                      │                      │
         ┌─────▼─────┐         ┌──────▼──────┐        ┌──────▼──────┐
-        │ Chunkers  │         │  Embedding  │        │  ChromaDB   │
+        │ Chunkers  │         │  Embedding  │        │   SQLite    │
         │ Registry  │         │  Provider   │        │   Store     │
         └───────────┘         └─────────────┘        └─────────────┘
 ```
@@ -242,7 +241,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 
 ## API Reference
 
-Theo exposes 25 MCP tools:
+Theo exposes 27 MCP tools:
 
 ### Document Tools (2)
 - `index_file(file_path, namespace)` - Index a single document
@@ -283,14 +282,20 @@ See [docs/API.md](docs/API.md) for complete API specifications.
 
 ## Claude Code Skills
 
-Theo provides 9 Claude Code skills for convenient CLI access:
+Theo provides 15 Claude Code skills for convenient CLI access:
 
 | Skill | Description | Example |
 |-------|-------------|---------|
 | `/index` | Index files or directories | `/index ~/Documents/project` |
 | `/search` | Semantic search across indexed docs | `/search authentication flow` |
+| `/store` | Store new memories | `/store Always use TypeScript --type=pattern` |
+| `/recall` | Recall memories via semantic search | `/recall coding preferences --expand` |
+| `/forget` | Delete memories by ID or query | `/forget mem_abc123` |
+| `/list` | Browse memories with pagination | `/list --type=preference --limit=10` |
+| `/relate` | Manage memory relationships | `/relate mem_a supersedes mem_b` |
+| `/clean` | Clean up indexed documents | `/clean file ./old-doc.md` |
 | `/stats` | Show index and memory statistics | `/stats` |
-| `/validate` | TRY-LEARN validation cycle | `/validate mem_abc123 success` |
+| `/validate` | TRY-LEARN validation cycle | `/validate apply mem_abc123 "testing"` |
 | `/contradictions` | Detect conflicting memories | `/contradictions mem_abc123` |
 | `/context` | Get formatted context for LLM injection | `/context authentication --budget 2000` |
 | `/health` | Analyze memory system health | `/health` |
@@ -386,14 +391,14 @@ uv run python -m theo --help
 2. Start Ollama if needed: `ollama serve`
 3. Pull the embedding model: `ollama pull nomic-embed-text`
 
-### ChromaDB Permission Error
+### SQLite Permission Error
 
-**Error**: `Permission denied: ~/.theo/chroma_db`
+**Error**: `Permission denied: ~/.theo/theo.db`
 
 **Solution**:
-1. Create directory: `mkdir -p ~/.theo/chroma_db`
+1. Create directory: `mkdir -p ~/.theo`
 2. Fix permissions: `chmod 755 ~/.theo`
-3. Or specify different path via `THEO_DB_PATH`
+3. Or specify different path via `THEO_SQLITE_PATH`
 
 ### Search Returns No Results
 
@@ -428,19 +433,19 @@ Golden rules (confidence >= 0.9) are protected. Use `force=true`:
 
 **Prevention**: The daemon's embed_worker is designed to briefly block the event loop (~50-100ms per batch) rather than use thread pools. This is the only reliable approach without process isolation.
 
-### ChromaDB FTS5 Corruption
+### SQLite FTS5 Issues
 
-**Error**: `PRAGMA integrity_check` shows FTS5 corruption warnings, or searches return incorrect/empty results
+**Error**: Full-text search returns unexpected results or `PRAGMA integrity_check` shows warnings
 
-**Cause**: ChromaDB's FTS5 (full-text search) index can become corrupted after crashes, improper shutdowns, or database upgrades.
+**Cause**: The FTS5 index can become stale after crashes or improper shutdowns.
 
 **Solution**:
 ```bash
-# Connect to the ChromaDB SQLite database
-sqlite3 ~/.theo/chroma_db/chroma.sqlite3
+# Connect to the Theo SQLite database
+sqlite3 ~/.theo/theo.db
 
 # Rebuild the FTS5 index
-INSERT INTO embedding_fulltext_search(embedding_fulltext_search) VALUES('rebuild');
+INSERT INTO memories_fts(memories_fts) VALUES('rebuild');
 
 # Verify the fix
 PRAGMA integrity_check;
@@ -450,9 +455,9 @@ PRAGMA integrity_check;
 ```
 
 **Prevention**:
-1. Always gracefully shutdown the daemon: `python -m theo.daemon.server --stop`
+1. Always gracefully shutdown the daemon
 2. After system crashes, run the FTS5 rebuild command above
-3. If corruption persists, delete `~/.theo/chroma_db/` and re-index
+3. If corruption persists, delete `~/.theo/theo.db` and re-index
 
 [↑ Back to top](#table-of-contents)
 

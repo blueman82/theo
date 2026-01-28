@@ -91,7 +91,7 @@ Built on three core principles:
 │  │  └────────────┘  │        └──────────────────────┘   │    │
 │  │  ┌────────────┐  │                                   │    │
 │  │  │   Code     │  │        ┌──────────────────────┐   │    │
-│  │  │  Chunker   │  │        │     ChromaStore      │   │    │
+│  │  │  Chunker   │  │        │     SQLiteStore      │   │    │
 │  │  └────────────┘  │        │   - Vector storage   │   │    │
 │  │                  │        │   - Similarity search│   │    │
 │  │ ChunkerRegistry  │        │   - Metadata filter  │   │    │
@@ -148,8 +148,7 @@ flowchart TB
 
     subgraph Storage["Storage Layer"]
         HS[HybridStore]
-        CDB[(ChromaDB<br/>Vector Storage)]
-        SQL[(SQLite<br/>Edges & Metadata)]
+        SQL[(SQLite + sqlite-vec<br/>Unified Storage)]
     end
 
     CC -->|JSON-RPC/stdio| FM
@@ -172,7 +171,7 @@ flowchart TB
     EP --> MLX & OLL
 
     DC --> HS
-    HS --> CDB & SQL
+    HS --> SQL
 ```
 
 ## Component Descriptions
@@ -210,7 +209,7 @@ Coordinates the indexing pipeline:
 2. Format detection by extension
 3. Chunker selection from registry
 4. Embedding via DaemonClient
-5. Storage in ChromaStore
+5. Storage in SQLiteStore
 
 **Key Design Decisions**:
 - Validation-first: Fail fast on invalid inputs
@@ -225,7 +224,7 @@ Coordinates the indexing pipeline:
 
 Manages semantic search pipeline:
 1. Query embedding via DaemonClient
-2. Vector search in ChromaDB
+2. Vector search in SQLite
 3. Metadata filtering
 4. Token budget enforcement
 5. Result ranking and formatting
@@ -347,47 +346,39 @@ class EmbeddingProvider(Protocol):
 
 #### HybridStore
 
-**Responsibility**: Coordinated storage combining ChromaDB and SQLite
+**Responsibility**: High-level storage coordination
 
 **Implementation**: `src/theo/storage/hybrid.py`
 
-The HybridStore coordinates two storage backends:
-- **ChromaDB**: Source of truth for all document/memory content and embeddings
-- **SQLite**: Handles relationship edges for graph traversal
+The HybridStore provides a high-level interface to SQLiteStore, handling:
+- Document and memory storage with embeddings
+- Graph expansion during queries
+- Validation event tracking
 
 ```python
 class HybridStore:
     """Coordinated storage layer."""
-    chroma: ChromaStore      # Vector storage
-    sqlite: SQLiteStore      # Edge storage
+    store: SQLiteStore      # Unified vector + metadata storage
 
     def store_with_edges(self, doc, edges): ...
     def query_with_graph_expansion(self, query, depth): ...
 ```
 
-#### ChromaStore
-
-**Responsibility**: Vector database operations
-
-**Implementation**: `src/theo/storage/chroma_store.py`
-
-Features:
-- Persistent local storage
-- Vector similarity search
-- Metadata filtering (WHERE clauses)
-- Deduplication tracking (by hash)
-
 #### SQLiteStore
 
-**Responsibility**: Relationship edge storage and graph traversal
+**Responsibility**: Unified vector and metadata storage using sqlite-vec
 
-**Implementation**: `src/theo/storage/sqlite.py`
+**Implementation**: `src/theo/storage/sqlite_store.py`
 
 Features:
+- Vector similarity search via sqlite-vec extension
+- Full-text search via FTS5
+- Metadata filtering (WHERE clauses)
+- Deduplication tracking (by content hash)
 - Edge storage (source_id, target_id, relation_type, weight)
 - Graph traversal queries (BFS, path finding)
 - Validation event history
-- Fast relationship lookups
+- Embedding cache for efficiency
 
 ### Document Chunkers
 
@@ -506,7 +497,7 @@ class RelationType(str, Enum):
      │
      ▼
 ┌──────────────────┐
-│ ChromaStore      │ ─── Store embeddings + metadata
+│ SQLiteStore      │ ─── Store embeddings + metadata
 └────┬─────────────┘     ─── Track doc_hash for dedup
      │
      ▼
@@ -575,7 +566,7 @@ class RelationType(str, Enum):
 **Rationale**:
 - **Conceptual Unity**: Both are "remembered information" with semantic search
 - **Shared Features**: Both benefit from confidence scoring, relationships, metadata
-- **Simpler Storage**: Single ChromaDB collection, unified query interface
+- **Simpler Storage**: Single SQLite collection, unified query interface
 - **Cross-pollination**: Documents can inform memories and vice versa
 
 ### Why Validation Loop for Memories?
@@ -644,14 +635,14 @@ All tools return consistent format:
 
 ### Current Limitations
 
-1. **Single-machine**: ChromaDB is not distributed
+1. **Single-machine**: SQLite is not distributed
 2. **Memory-bound**: Large batches limited by RAM
 3. **Local embedding**: No GPU scaling across machines
 
 ### Scaling Strategies
 
 For larger deployments:
-1. **Shard by namespace**: Separate ChromaDB instances per project
+1. **Shard by namespace**: Separate SQLite instances per project
 2. **Background indexing**: Queue large directories for async processing
 3. **Embedding service**: Replace daemon with dedicated embedding API
 
@@ -675,5 +666,5 @@ Full pipeline tests with real components:
 
 Tests use fixtures for isolation:
 - `mock_daemon_client`: Returns deterministic embeddings
-- `temp_chroma`: In-memory ChromaDB for isolated tests
+- `temp_chroma`: In-memory SQLite for isolated tests
 - `tmp_path`: Temporary directories for file operations
