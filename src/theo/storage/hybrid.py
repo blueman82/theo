@@ -511,8 +511,8 @@ class HybridStore:
             memory_type: Filter by type (optional)
             limit: Maximum number of results
             offset: Number of results to skip
-            order_by: Field to sort by (unused - SQLiteStore returns by created_at DESC)
-            descending: Sort in descending order (unused)
+            order_by: Field to sort by (default: created_at)
+            descending: Sort in descending order (default: True)
 
         Returns:
             List of memory dicts
@@ -522,6 +522,8 @@ class HybridStore:
             memory_type=memory_type,
             limit=limit,
             offset=offset,
+            order_by=order_by,
+            descending=descending,
         )
 
         # Convert to HybridStore format
