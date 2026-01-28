@@ -70,15 +70,8 @@ class HybridStore:
         embedding_backend: EmbeddingBackend = "mlx",
         mlx_model: str = "mlx-community/mxbai-embed-large-v1",
         embedding_client: Optional[EmbeddingProvider] = None,
-        # Legacy parameters (ignored, kept for backward compatibility)
-        chroma_path: Optional[Path] = None,
-        collection_name: str = "documents",
-        ephemeral: bool = False,
     ) -> "HybridStore":
         """Create a HybridStore with new component instances.
-
-        Factory method for convenient HybridStore creation with
-        default configurations.
 
         Args:
             sqlite_path: Path to SQLite database (default: ~/.theo/theo.db)
@@ -88,9 +81,6 @@ class HybridStore:
             mlx_model: MLX model identifier (used when embedding_backend='mlx')
             embedding_client: Optional existing EmbeddingProvider to reuse
                 (avoids creating duplicate Metal contexts on Apple Silicon)
-            chroma_path: DEPRECATED - ignored
-            collection_name: DEPRECATED - ignored
-            ephemeral: DEPRECATED - ignored
 
         Returns:
             Configured HybridStore instance
