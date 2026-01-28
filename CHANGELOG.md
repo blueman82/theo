@@ -2,6 +2,16 @@
 
 All notable changes to Theo will be documented in this file.
 
+## [0.2.2] - 2026-01-28
+
+### Fixed
+- Capped sqlite-vec KNN `k` value at 4096 to prevent "k too large" errors when namespace filtering with large multiplier
+- Added `memory_list` to `--call` tool_map in `__main__.py` (was returning "Unknown tool" via subprocess)
+
+### Added
+- `order_by` and `descending` parameters for `list_memories` across SQLiteStore, HybridStore, and memory_tools
+- SQL injection protection via column whitelist for `order_by` parameter
+
 ## [0.2.1] - 2026-01-28
 
 ### Fixed
