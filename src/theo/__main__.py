@@ -337,6 +337,7 @@ def call_tool_directly(args: argparse.Namespace) -> None:
     tool_map = {
         "memory_store": memory_tools.memory_store,
         "memory_recall": memory_tools.memory_recall,
+        "memory_list": memory_tools.memory_list,
         "memory_forget": memory_tools.memory_forget,
         "memory_detect_contradictions": memory_tools.memory_detect_contradictions,
         "memory_check_supersedes": memory_tools.memory_check_supersedes,
