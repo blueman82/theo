@@ -158,6 +158,7 @@ class MemoryTools:
         namespace: str = "global",
         importance: float = 0.5,
         metadata: Optional[dict[str, Any]] = None,
+        relates_to: Optional[list[dict[str, Any]]] = None,
     ) -> dict[str, Any]:
         """Store a new memory with semantic indexing.
 
@@ -174,11 +175,16 @@ class MemoryTools:
             namespace: Scope of the memory (global, default, or project:{name})
             importance: Importance score from 0.0 to 1.0 (default: 0.5)
             metadata: Optional additional metadata
+            relates_to: Optional list of relations to create after storing.
+                Each dict must have 'target_id' and 'relation' keys.
+                Valid relations: relates_to, supersedes, caused_by, contradicts.
+                Optional 'weight' key (default: 1.0).
+                Example: [{"target_id": "mem_abc", "relation": "relates_to"}]
 
         Returns:
             Dictionary with:
             - success: Boolean indicating operation success
-            - data: Dictionary with id, content_hash, namespace, duplicate
+            - data: Dictionary with id, content_hash, namespace, duplicate, relations
             - error: Error message if operation failed
         """
         try:
@@ -213,6 +219,36 @@ class MemoryTools:
                     "success": False,
                     "error": f"Importance must be between 0.0 and 1.0, got {importance}",
                 }
+
+            # Validate relates_to structure if provided
+            if relates_to is not None:
+                if not isinstance(relates_to, list):
+                    return {
+                        "success": False,
+                        "error": "relates_to must be a list of relation dicts",
+                    }
+                valid_relations = [r.value for r in RelationType]
+                for rel in relates_to:
+                    if not isinstance(rel, dict):
+                        return {
+                            "success": False,
+                            "error": "Each relates_to entry must be a dict",
+                        }
+                    if "target_id" not in rel:
+                        return {
+                            "success": False,
+                            "error": "Each relates_to entry must have 'target_id'",
+                        }
+                    if "relation" not in rel:
+                        return {
+                            "success": False,
+                            "error": "Each relates_to entry must have 'relation'",
+                        }
+                    if rel["relation"] not in valid_relations:
+                        return {
+                            "success": False,
+                            "error": f"Invalid relation '{rel['relation']}'. Must be one of: {valid_relations}",
+                        }
 
             # Compute content hash for deduplication
             content_hash = self._compute_hash(content)
@@ -249,16 +285,62 @@ class MemoryTools:
 
             logger.info(f"Stored memory {memory_id} in namespace {namespace}")
 
+            # Create relations if provided
+            created_relations: list[dict[str, Any]] = []
+            relation_errors: list[str] = []
+
+            if relates_to and self._hybrid:
+                for rel in relates_to:
+                    target_id = rel["target_id"]
+                    relation = rel["relation"]
+                    weight = rel.get("weight", 1.0)
+
+                    try:
+                        # Verify target memory exists
+                        target_memory = await self._hybrid.get_memory(target_id)
+                        if target_memory is None:
+                            relation_errors.append(f"Target '{target_id}' not found")
+                            continue
+
+                        # Handle 'supersedes' relation special case
+                        rel_type = RelationType(relation)
+                        if rel_type == RelationType.SUPERSEDES:
+                            current_importance = target_memory.get("importance", 0.5)
+                            new_importance = current_importance * 0.5
+                            await self._hybrid.update_memory(target_id, importance=new_importance)
+
+                        # Create the edge
+                        edge_id = self._hybrid.add_edge(
+                            source_id=memory_id,
+                            target_id=target_id,
+                            edge_type=rel_type.value,
+                            weight=weight,
+                        )
+                        created_relations.append({
+                            "edge_id": edge_id,
+                            "target_id": target_id,
+                            "relation": relation,
+                        })
+                    except Exception as e:
+                        relation_errors.append(f"Failed to create relation to '{target_id}': {e}")
+
+            result_data: dict[str, Any] = {
+                "id": memory_id,
+                "content_hash": content_hash,
+                "namespace": namespace,
+                "memory_type": mem_type.value,
+                "importance": importance,
+                "duplicate": False,
+            }
+
+            if created_relations:
+                result_data["relations"] = created_relations
+            if relation_errors:
+                result_data["relation_errors"] = relation_errors
+
             return {
                 "success": True,
-                "data": {
-                    "id": memory_id,
-                    "content_hash": content_hash,
-                    "namespace": namespace,
-                    "memory_type": mem_type.value,
-                    "importance": importance,
-                    "duplicate": False,
-                },
+                "data": result_data,
             }
 
         except Exception as e:

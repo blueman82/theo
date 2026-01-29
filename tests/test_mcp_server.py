@@ -476,6 +476,47 @@ class TestMemoryTools:
         assert result["data"]["old_confidence"] == 0.5
         assert result["data"]["new_confidence"] == 0.6
 
+    def test_memory_store_with_relates_to(
+        self, mock_daemon_client, mock_store, mock_validation_loop
+    ):
+        """Test memory_store with relates_to parameter creates relations."""
+        from unittest.mock import AsyncMock
+        from theo.tools.memory_tools import MemoryTools
+
+        mock_store.add_memory.return_value = "mem_new123"
+
+        # Create a mock hybrid store for relations
+        mock_hybrid = AsyncMock()
+        mock_hybrid.get_memory = AsyncMock(return_value={"id": "mem_target", "importance": 0.5})
+        mock_hybrid.add_edge.return_value = "edge_123"
+        mock_hybrid.update_memory = AsyncMock()
+
+        tools = MemoryTools(
+            daemon_client=mock_daemon_client,
+            store=mock_store,
+            validation_loop=mock_validation_loop,
+            hybrid_store=mock_hybrid,
+        )
+
+        import asyncio
+
+        result = asyncio.run(
+            tools.memory_store(
+                content="New memory that relates to existing",
+                memory_type="pattern",
+                namespace="global",
+                relates_to=[{"target_id": "mem_target", "relation": "relates_to"}],
+            )
+        )
+
+        assert result["success"] is True
+        assert result["data"]["id"] == "mem_new123"
+        assert "relations" in result["data"]
+        assert len(result["data"]["relations"]) == 1
+        assert result["data"]["relations"][0]["target_id"] == "mem_target"
+        assert result["data"]["relations"][0]["relation"] == "relates_to"
+        mock_hybrid.add_edge.assert_called_once()
+
 
 # =============================================================================
 # ManagementTools Tests
