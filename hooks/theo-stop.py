@@ -899,14 +899,25 @@ You MUST store at least one memory before stopping.
 **Specific learnings from this session to consider:**
 {suggestions_text}
 
-## Quick Store Command
+## Quick Store Command (with auto-linking)
 
 ```javascript
+// First, recall existing memories to find what to link to
+const existing = await theo.memory_recall({{
+  query: "your topic here",
+  namespace: "project:name",
+  limit: 3
+}});
+
+// Then store with relates_to for automatic linking
 await theo.memory_store({{
   content: "...",  // Use a suggestion above or describe what you learned
   memory_type: "pattern",  // or preference, decision
   importance: 0.6,
-  namespace: "project:name"
+  namespace: "project:name",
+  relates_to: [  // Links memory to existing graph
+    {{"target_id": "mem_xxx", "relation": "relates_to"}}
+  ]
 }});
 ```
 
@@ -938,14 +949,25 @@ You MUST store at least one memory before stopping.
 | `memory_check_supersedes` | Check if memory supersedes another |
 | `memory_analyze_health` | Analyze memory system health |
 
-## Store Session Learning
+## Store Session Learning (ALWAYS link to graph)
 
 ```javascript
+// 1. First recall to find parent/related memories
+const related = await theo.memory_recall({
+  query: "topic of your learning",
+  namespace: "project:name",
+  limit: 3
+});
+
+// 2. Store with relates_to for graph connectivity
 await theo.memory_store({
   content: "What happened: task requested, actions taken, outcome",
   memory_type: "session",  // or pattern, decision, preference
   importance: 0.5,
-  namespace: "project:name"  // or "global"
+  namespace: "project:name",  // or "global"
+  relates_to: [  // Use IDs from recall results
+    {"target_id": "mem_parent_id", "relation": "relates_to"}
+  ]
 });
 ```
 
@@ -1212,13 +1234,25 @@ You MUST evaluate learnings from this interaction before stopping:
 
 ## Before Stopping
 
-**Store new learnings:**
+**Step 1: Recall existing memories to link to:**
+```javascript
+const related = await theo.memory_recall({
+  query: "topic of your learning",
+  namespace: "project:name",
+  limit: 3
+});
+```
+
+**Step 2: Store with relates_to for graph connectivity:**
 ```javascript
 await theo.memory_store({
   content: "...",
   memory_type: "pattern",  // preference, decision, golden_rule
   importance: 0.7,
-  namespace: "project:name"
+  namespace: "project:name",
+  relates_to: [  // REQUIRED: Always link to existing graph
+    {"target_id": "mem_xxx", "relation": "relates_to"}
+  ]
 });
 ```
 
