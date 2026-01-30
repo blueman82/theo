@@ -2,6 +2,17 @@
 
 All notable changes to Theo will be documented in this file.
 
+## [0.3.0] - 2026-01-29
+
+### Added
+- `relates_to` parameter for `memory_store` - create graph relationships during storage in a single call
+  - Accepts list of `{target_id, relation, weight?}` dicts
+  - Valid relations: `relates_to`, `supersedes`, `caused_by`, `contradicts`
+  - Handles `supersedes` relation by reducing target importance by 50%
+
+### Changed
+- Updated stop hook prompts to show recall→store→link workflow with `relates_to`
+
 ## [0.2.2] - 2026-01-28
 
 ### Fixed
