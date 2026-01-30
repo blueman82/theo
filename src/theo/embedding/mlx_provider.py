@@ -148,8 +148,7 @@ class MLXProvider:
                 result = embeddings.tolist()
             else:
                 result = [
-                    emb.tolist() if hasattr(emb, "tolist") else list(emb)
-                    for emb in embeddings
+                    emb.tolist() if hasattr(emb, "tolist") else list(emb) for emb in embeddings
                 ]
 
             # NOTE: Do NOT call mx.clear_cache() here - it causes Metal race conditions
@@ -264,9 +263,7 @@ class MLXProvider:
             # See _generate_embedding_sync() for details.
             logger.debug("MLX provider resources released")
 
-    async def embed_batch(
-        self, texts: list[str], is_query: bool = False
-    ) -> list[list[float]]:
+    async def embed_batch(self, texts: list[str], is_query: bool = False) -> list[list[float]]:
         """Async batch embedding for daemon workers.
 
         IMPORTANT: MLX Metal is NOT thread-safe. Metal command buffers crash
@@ -291,9 +288,7 @@ class MLXProvider:
         """
         # Run synchronously - MLX Metal crashes with thread pool executors
         if is_query:
-            prefixed_texts = [
-                f"{EMBED_PREFIX}{t}" if self._is_mxbai else t for t in texts
-            ]
+            prefixed_texts = [f"{EMBED_PREFIX}{t}" if self._is_mxbai else t for t in texts]
             return self._generate_embedding_sync(prefixed_texts)
         else:
             return self.embed_texts(texts)

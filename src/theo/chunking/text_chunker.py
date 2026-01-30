@@ -18,9 +18,7 @@ class TextChunker(AbstractChunker):
         max_tokens: Maximum tokens per chunk (enforced via split_oversized_chunk)
     """
 
-    def __init__(
-        self, chunk_size: int = 1000, chunk_overlap: int = 200, max_tokens: int = 256
-    ):
+    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200, max_tokens: int = 256):
         """Initialize text chunker.
 
         Args:
@@ -84,9 +82,7 @@ class TextChunker(AbstractChunker):
             paragraph_lines = paragraph.count("\n") + 1
 
             # Chunk this paragraph
-            paragraph_chunks = self._chunk_paragraph(
-                paragraph, current_line, previous_sentences
-            )
+            paragraph_chunks = self._chunk_paragraph(paragraph, current_line, previous_sentences)
 
             # Add chunks with proper indexing
             for para_chunk in paragraph_chunks:

@@ -37,6 +37,7 @@ import signal
 import sys
 import uuid
 from datetime import datetime
+from functools import partial
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -629,7 +630,7 @@ def setup_signals(server: DaemonServer) -> None:
         asyncio.create_task(server.stop())
 
     for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda s=sig: handle_signal(s))
+        loop.add_signal_handler(sig, partial(handle_signal, sig))
 
 
 async def run_daemon(

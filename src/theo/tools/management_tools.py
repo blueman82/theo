@@ -224,7 +224,8 @@ class ManagementTools:
         Returns:
             Dictionary with:
             - success: Boolean indicating operation success
-            - data: Dictionary with total_documents, unique_sources, source_files, namespaces, doc_types
+            - data: Dictionary with total_documents, unique_sources,
+              source_files, namespaces, doc_types
             - error: Error message if operation failed
         """
         try:
@@ -235,7 +236,7 @@ class ManagementTools:
             # Get unique namespaces and memory types from list_memories
             all_memories = self._store.list_memories(limit=10000)
             namespaces = list(set(m["namespace"] for m in all_memories if m.get("namespace")))
-            memory_types = {}
+            memory_types: dict[str, int] = {}
             source_files = set()
             for m in all_memories:
                 mem_type = m.get("memory_type", "document")

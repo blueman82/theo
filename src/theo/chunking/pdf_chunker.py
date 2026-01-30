@@ -24,9 +24,7 @@ class PDFChunker(AbstractChunker):
         max_tokens: Maximum tokens per chunk (enforced via split_oversized_chunk)
     """
 
-    def __init__(
-        self, chunk_size: int = 1000, chunk_overlap: int = 200, max_tokens: int = 256
-    ):
+    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200, max_tokens: int = 256):
         """Initialize PDF chunker.
 
         Args:

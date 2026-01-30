@@ -6,7 +6,7 @@ format detection logic that was previously embedded in the Indexer class.
 """
 
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional, cast
 
 from theo.chunking.base import AbstractChunker
 from theo.chunking.code_chunker import CodeChunker
@@ -103,27 +103,41 @@ class ChunkerRegistry:
         Returns:
             Instantiated chunker
         """
+        chunk_overlap = min(200, self.chunk_size // 5)
+
         if chunker_class == CodeChunker:
             # CodeChunker uses chunk_size for line count, not characters
-            # Default to 100 lines per chunk for fallback mode
             return CodeChunker(chunk_size=100, max_tokens=self.max_tokens)
-        elif chunker_class in (MarkdownChunker, PDFChunker, TextChunker):
-            # These chunkers accept chunk_size, chunk_overlap, and max_tokens
-            return chunker_class(
+        elif chunker_class == MarkdownChunker:
+            return MarkdownChunker(
                 chunk_size=self.chunk_size,
-                chunk_overlap=min(200, self.chunk_size // 5),
+                chunk_overlap=chunk_overlap,
+                max_tokens=self.max_tokens,
+            )
+        elif chunker_class == PDFChunker:
+            return PDFChunker(
+                chunk_size=self.chunk_size,
+                chunk_overlap=chunk_overlap,
+                max_tokens=self.max_tokens,
+            )
+        elif chunker_class == TextChunker:
+            return TextChunker(
+                chunk_size=self.chunk_size,
+                chunk_overlap=chunk_overlap,
                 max_tokens=self.max_tokens,
             )
         else:
-            # Custom chunker - try with both params, fall back if needed
+            # Custom chunker - duck typing with runtime fallback
+            # Cast to Any since custom chunkers may have different signatures
+            custom_class = cast(type[Any], chunker_class)
             try:
-                return chunker_class(
+                return custom_class(
                     chunk_size=self.chunk_size,
                     max_tokens=self.max_tokens,
                 )
             except TypeError:
                 # Custom chunker might have different signature
-                return chunker_class()
+                return custom_class()
 
     def register(self, extension: str, chunker_class: type[AbstractChunker]) -> None:
         """Register a custom chunker for a file extension.
@@ -190,4 +204,6 @@ class ChunkerRegistry:
     def __repr__(self) -> str:
         """Return string representation of registry state."""
         extensions = ", ".join(sorted(self._chunker_map.keys()))
-        return f"ChunkerRegistry(extensions=[{extensions}], default={self._default_chunker.__name__})"
+        return (
+            f"ChunkerRegistry(extensions=[{extensions}], default={self._default_chunker.__name__})"
+        )

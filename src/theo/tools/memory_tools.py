@@ -30,18 +30,13 @@ from theo.daemon import DaemonClient
 from theo.storage.hybrid import HybridStore
 from theo.storage.sqlite_store import SQLiteStore
 from theo.types import (
-    ApplyResult,
-    ContradictionResult,
-    EdgeForgetResult,
     GraphEdge,
     GraphInspectionResult,
     GraphNode,
     GraphPath,
     GraphStats,
     MemoryType,
-    OutcomeResult,
     RelationType,
-    SupersedesResult,
 )
 from theo.validation import ValidationLoop
 
@@ -247,7 +242,8 @@ class MemoryTools:
                     if rel["relation"] not in valid_relations:
                         return {
                             "success": False,
-                            "error": f"Invalid relation '{rel['relation']}'. Must be one of: {valid_relations}",
+                            "error": f"Invalid relation '{rel['relation']}'. "
+                            f"Must be one of: {valid_relations}",
                         }
 
             # Compute content hash for deduplication
@@ -257,9 +253,10 @@ class MemoryTools:
             embed_result = self._daemon.embed([content])
 
             if not embed_result.get("success"):
+                err = embed_result.get("error", "Unknown error")
                 return {
                     "success": False,
-                    "error": f"Embedding generation failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Embedding generation failed: {err}",
                 }
 
             embeddings = embed_result.get("data", {}).get("embeddings", [])
@@ -316,11 +313,13 @@ class MemoryTools:
                             edge_type=rel_type.value,
                             weight=weight,
                         )
-                        created_relations.append({
-                            "edge_id": edge_id,
-                            "target_id": target_id,
-                            "relation": relation,
-                        })
+                        created_relations.append(
+                            {
+                                "edge_id": edge_id,
+                                "target_id": target_id,
+                                "relation": relation,
+                            }
+                        )
                     except Exception as e:
                         relation_errors.append(f"Failed to create relation to '{target_id}': {e}")
 
@@ -395,7 +394,7 @@ class MemoryTools:
             if not embed_result.get("success"):
                 return {
                     "success": False,
-                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown')}",
                 }
 
             query_embedding = embed_result.get("data", {}).get("embedding", [])
@@ -424,7 +423,7 @@ class MemoryTools:
             )
 
             # Filter results by importance and confidence (namespace/type already filtered)
-            memories_data = []
+            memories_data: list[dict[str, Any]] = []
             for i, result in enumerate(results):
                 # Apply importance filter
                 if min_importance is not None and result.importance < min_importance:
@@ -433,17 +432,19 @@ class MemoryTools:
                 if min_confidence is not None and result.confidence < min_confidence:
                     continue
 
-                memories_data.append({
-                    "id": result.id,
-                    "content": result.content,
-                    "content_hash": None,  # Not returned by search_hybrid
-                    "type": result.memory_type,
-                    "namespace": result.namespace,
-                    "importance": result.importance,
-                    "confidence": result.confidence,
-                    "similarity": result.score,
-                    "rank": len(memories_data),
-                })
+                memories_data.append(
+                    {
+                        "id": result.id,
+                        "content": result.content,
+                        "content_hash": None,  # Not returned by search_hybrid
+                        "type": result.memory_type,
+                        "namespace": result.namespace,
+                        "importance": result.importance,
+                        "confidence": result.confidence,
+                        "similarity": result.score,
+                        "rank": len(memories_data),
+                    }
+                )
 
                 # Stop once we have enough results
                 if len(memories_data) >= n_results:
@@ -452,34 +453,40 @@ class MemoryTools:
             # Graph expansion if requested - uses SQLiteStore directly
             expanded_data = []
             if include_related and memories_data:
-                seen_ids = {m["id"] for m in memories_data}
-                to_expand = [m["id"] for m in memories_data]
+                seen_ids: set[str] = {str(m["id"]) for m in memories_data}
+                to_expand: list[str] = [str(m["id"]) for m in memories_data]
 
                 for depth in range(max_depth):
-                    next_expand = []
+                    next_expand: list[str] = []
                     for memory_id in to_expand:
                         # Use SQLiteStore's get_edges directly
                         edges = self._store.get_edges(memory_id, direction="both")
                         for edge in edges:
                             # Get the connected memory ID
-                            connected_id = edge.get("target_id") if edge.get("source_id") == memory_id else edge.get("source_id")
+                            connected_id = (
+                                edge.get("target_id")
+                                if edge.get("source_id") == memory_id
+                                else edge.get("source_id")
+                            )
                             if connected_id and connected_id not in seen_ids:
                                 seen_ids.add(connected_id)
                                 next_expand.append(connected_id)
                                 # Fetch the connected memory using SQLiteStore
                                 connected_mem = self._store.get_memory(connected_id)
                                 if connected_mem:
-                                    expanded_data.append({
-                                        "id": connected_id,
-                                        "content": connected_mem.get("content", ""),
-                                        "type": connected_mem.get("memory_type", "memory"),
-                                        "namespace": connected_mem.get("namespace", ""),
-                                        "importance": connected_mem.get("importance", 0.5),
-                                        "confidence": connected_mem.get("confidence", 0.5),
-                                        "relation": edge.get("edge_type", "related"),
-                                        "via_memory": memory_id,
-                                        "depth": depth + 1,
-                                    })
+                                    expanded_data.append(
+                                        {
+                                            "id": connected_id,
+                                            "content": connected_mem.get("content", ""),
+                                            "type": connected_mem.get("memory_type", "memory"),
+                                            "namespace": connected_mem.get("namespace", ""),
+                                            "importance": connected_mem.get("importance", 0.5),
+                                            "confidence": connected_mem.get("confidence", 0.5),
+                                            "relation": edge.get("edge_type", "related"),
+                                            "via_memory": memory_id,
+                                            "depth": depth + 1,
+                                        }
+                                    )
                     to_expand = next_expand
                     if not to_expand:
                         break
@@ -627,15 +634,13 @@ class MemoryTools:
                 confidence = existing.get("confidence", 0.0)
                 mem_type = existing.get("memory_type", "")
 
-                is_protected = (
-                    confidence >= 0.9 or mem_type == "golden_rule"
-                )
+                is_protected = confidence >= 0.9 or mem_type == "golden_rule"
 
                 if is_protected and not force:
                     return {
                         "success": False,
-                        "error": f"Memory {memory_id} is a golden rule (confidence={confidence:.2f}). "
-                        "Use force=True to delete.",
+                        "error": f"Memory {memory_id} is golden "
+                        f"(confidence={confidence:.2f}). Use force=True.",
                         "data": {"protected_ids": [memory_id]},
                     }
 
@@ -653,7 +658,7 @@ class MemoryTools:
                 if not embed_result.get("success"):
                     return {
                         "success": False,
-                        "error": f"Query embedding failed: {embed_result.get('error', 'Unknown error')}",
+                        "error": f"Query embedding failed: {embed_result.get('error', 'Unknown')}",
                     }
 
                 query_embedding = embed_result.get("data", {}).get("embedding", [])
@@ -678,9 +683,7 @@ class MemoryTools:
                     if namespace and result.namespace != namespace:
                         continue
 
-                    is_protected = (
-                        result.confidence >= 0.9 or result.memory_type == "golden_rule"
-                    )
+                    is_protected = result.confidence >= 0.9 or result.memory_type == "golden_rule"
 
                     if is_protected and not force:
                         protected_ids.append(result.id)
@@ -765,14 +768,16 @@ class MemoryTools:
                 # Convert to expected format and sort by importance (descending)
                 memories_data = []
                 for doc in all_docs:
-                    memories_data.append({
-                        "id": doc["id"],
-                        "content": doc["content"],
-                        "type": doc["memory_type"],
-                        "importance": doc["importance"],
-                        "confidence": doc["confidence"],
-                        "namespace": doc["namespace"],
-                    })
+                    memories_data.append(
+                        {
+                            "id": doc["id"],
+                            "content": doc["content"],
+                            "type": doc["memory_type"],
+                            "importance": doc["importance"],
+                            "confidence": doc["confidence"],
+                            "namespace": doc["namespace"],
+                        }
+                    )
 
                 # Sort by importance and take top results
                 memories_data.sort(key=lambda x: x["importance"], reverse=True)
@@ -783,7 +788,9 @@ class MemoryTools:
 
             total_tokens = 0
             for mem in memories:
-                mem_text = f"- **{mem['type']}** (confidence: {mem.get('confidence', 0.3):.2f}): {mem['content']}"
+                conf = mem.get("confidence", 0.3)
+                mem_text = f"- **{mem['type']}** (confidence: {conf:.2f}): "
+                mem_text += mem["content"]
                 mem_tokens = len(mem_text) // 4
 
                 if total_tokens + mem_tokens > token_budget:
@@ -1095,7 +1102,9 @@ class MemoryTools:
 
             elif source_id is not None and target_id is not None:
                 # Mode 3: Delete edges between two specific memories
-                outgoing = self._hybrid.get_edges(source_id, direction="outgoing", edge_type=relation)
+                outgoing = self._hybrid.get_edges(
+                    source_id, direction="outgoing", edge_type=relation
+                )
                 for edge in outgoing:
                     if edge["target_id"] == target_id:
                         if self._hybrid.delete_edge_by_id(edge["id"]):
@@ -1164,10 +1173,11 @@ class MemoryTools:
                 }
 
             # Validate direction
-            if direction not in ("outgoing", "incoming", "both"):
+            valid_dirs = ("outgoing", "incoming", "both")
+            if direction not in valid_dirs:
                 return {
                     "success": False,
-                    "error": f"Invalid direction: {direction}. Must be 'outgoing', 'incoming', or 'both'",
+                    "error": f"Invalid direction: {direction}. Must be one of: {valid_dirs}",
                 }
 
             # Verify origin memory exists
@@ -1230,13 +1240,15 @@ class MemoryTools:
                         neighbor_id = edge_data["source_id"]
 
                     # Add edge to results
-                    edges.append(GraphEdge(
-                        id=edge_data["id"],
-                        source_id=edge_data["source_id"],
-                        target_id=edge_data["target_id"],
-                        edge_type=edge_data["edge_type"],
-                        weight=edge_data["weight"],
-                    ))
+                    edges.append(
+                        GraphEdge(
+                            id=edge_data["id"],
+                            source_id=edge_data["source_id"],
+                            target_id=edge_data["target_id"],
+                            edge_type=edge_data["edge_type"],
+                            weight=edge_data["weight"],
+                        )
+                    )
 
                     # Add neighbor node if not seen
                     if neighbor_id not in nodes:
@@ -1260,15 +1272,19 @@ class MemoryTools:
 
                     if include_scores:
                         relevance = new_weight * (decay_factor ** (depth + 1))
-                        paths.append(GraphPath(
-                            node_ids=new_path_nodes,
-                            edge_types=new_path_edges,
-                            total_weight=new_weight,
-                            relevance_score=relevance,
-                        ))
+                        paths.append(
+                            GraphPath(
+                                node_ids=new_path_nodes,
+                                edge_types=new_path_edges,
+                                total_weight=new_weight,
+                                relevance_score=relevance,
+                            )
+                        )
 
                     # Continue BFS
-                    queue.append((neighbor_id, depth + 1, new_path_nodes, new_path_edges, new_weight))
+                    queue.append(
+                        (neighbor_id, depth + 1, new_path_nodes, new_path_edges, new_weight)
+                    )
 
             # Build result
             result = GraphInspectionResult(
@@ -1432,14 +1448,16 @@ class MemoryTools:
             # Convert to expected response format
             memories = []
             for doc in result:
-                memories.append({
-                    "id": doc["id"],
-                    "content": doc["content"],
-                    "type": doc["memory_type"],
-                    "namespace": doc["namespace"],
-                    "importance": doc["importance"],
-                    "confidence": doc["confidence"],
-                })
+                memories.append(
+                    {
+                        "id": doc["id"],
+                        "content": doc["content"],
+                        "type": doc["memory_type"],
+                        "namespace": doc["namespace"],
+                        "importance": doc["importance"],
+                        "confidence": doc["confidence"],
+                    }
+                )
 
             return {
                 "success": True,
@@ -1714,22 +1732,26 @@ class MemoryTools:
             for mem in memories:
                 # Check low confidence
                 if include_low_confidence and mem.get("confidence", 0.3) < 0.3:
-                    issues["low_confidence"].append({
-                        "id": mem["id"],
-                        "confidence": mem.get("confidence", 0.3),
-                        "content_preview": mem.get("content", "")[:100],
-                    })
+                    issues["low_confidence"].append(
+                        {
+                            "id": mem["id"],
+                            "confidence": mem.get("confidence", 0.3),
+                            "content_preview": mem.get("content", "")[:100],
+                        }
+                    )
 
                 # Check stale (no recent access)
                 if include_stale:
                     accessed_at = mem.get("accessed_at")
                     if accessed_at and isinstance(accessed_at, (int, float)):
                         if accessed_at < stale_threshold:
-                            issues["stale"].append({
-                                "id": mem["id"],
-                                "last_accessed": accessed_at,
-                                "content_preview": mem.get("content", "")[:100],
-                            })
+                            issues["stale"].append(
+                                {
+                                    "id": mem["id"],
+                                    "last_accessed": accessed_at,
+                                    "content_preview": mem.get("content", "")[:100],
+                                }
+                            )
 
             # Generate recommendations
             if issues["low_confidence"]:
@@ -1739,8 +1761,9 @@ class MemoryTools:
                 )
 
             if issues["stale"]:
+                stale_count = len(issues["stale"])
                 issues["recommendations"].append(
-                    f"Found {len(issues['stale'])} stale memories (no access in {stale_days} days). "
+                    f"Found {stale_count} stale memories (no access in {stale_days} days). "
                     "Consider reviewing and validating or archiving them."
                 )
 

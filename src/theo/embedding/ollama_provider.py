@@ -130,14 +130,10 @@ class OllamaProvider:
 
             # Verify model exists in available models
             models_data = response.json()
-            available_models = [
-                m.get("name", "") for m in models_data.get("models", [])
-            ]
+            available_models = [m.get("name", "") for m in models_data.get("models", [])]
 
             # Check if our model is in the list
-            model_available = any(
-                self.model in model_name for model_name in available_models
-            )
+            model_available = any(self.model in model_name for model_name in available_models)
 
             if not model_available:
                 # Try to pull/load the model by making a test embedding request
@@ -164,9 +160,7 @@ class OllamaProvider:
             response = self._session.get(f"{self.host}/api/tags", timeout=self.timeout)
             response.raise_for_status()
             models_data = response.json()
-            available_models = [
-                m.get("name", "") for m in models_data.get("models", [])
-            ]
+            available_models = [m.get("name", "") for m in models_data.get("models", [])]
             return any(self.model in model_name for model_name in available_models)
         except Exception:
             return False
@@ -219,9 +213,7 @@ class OllamaProvider:
                                     else:
                                         logger.info(f"Pulling {self.model}: {status}")
                                 elif status == "success":
-                                    logger.info(
-                                        f"Successfully pulled model '{self.model}'"
-                                    )
+                                    logger.info(f"Successfully pulled model '{self.model}'")
                                 else:
                                     logger.info(f"Pull status: {status}")
                                 last_status = status
@@ -404,9 +396,7 @@ class OllamaProvider:
         """Context manager exit - close session."""
         self.close()
 
-    async def embed_batch(
-        self, texts: list[str], is_query: bool = False
-    ) -> list[list[float]]:
+    async def embed_batch(self, texts: list[str], is_query: bool = False) -> list[list[float]]:
         """Async batch embedding for daemon workers.
 
         This method provides an async interface for the daemon's EmbeddingBatcher.

@@ -56,9 +56,7 @@ class TheoSettings(BaseSettings):
     )
 
     # Logging (required)
-    log_level: str = Field(
-        description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)"
-    )
+    log_level: str = Field(description="Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)")
 
     # Memory defaults (required)
     default_namespace: str = Field(description="Default namespace for memories")
@@ -69,9 +67,7 @@ class TheoSettings(BaseSettings):
     )
 
     # Token budget (required)
-    default_token_budget: int = Field(
-        description="Default token budget for context generation"
-    )
+    default_token_budget: int = Field(description="Default token budget for context generation")
 
     def get_sqlite_path(self) -> Path:
         """Get the SQLite path, expanding user home."""

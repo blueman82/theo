@@ -1,0 +1,383 @@
+#!/usr/bin/env bash
+#
+# check - Local CI validation for Theo
+#
+# This script runs all validation checks (ruff, black, isort, mypy, pytest)
+# using uv run. All checks must pass for CI to succeed.
+#
+# Usage: ./check [options]
+#   -h, --help        Show this help message
+#   -v, --verbose     Verbose output with detailed results
+#   --fix             Auto-fix code style issues (black, ruff, isort)
+#   --quick           Skip slow checks (only run ruff)
+#   --with-tests      Run pytest unit tests (disabled by default)
+#
+
+set -euo pipefail
+
+# ========== CONSTANTS & VARIABLES ==========
+PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SRC_DIR="${PROJECT_ROOT}/src/theo"
+TESTS_DIR="${PROJECT_ROOT}/tests/transcription"
+
+# Color definitions
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m' # No Color
+
+# Default settings
+VERBOSE=false
+FIX=false
+QUICK=false
+WITH_TESTS=false
+
+# Track results
+CHECKS_PASSED=0
+CHECKS_FAILED=0
+FAILED_CHECKS=()
+
+# ========== HELPER FUNCTIONS ==========
+log_info() {
+    echo -e "${BLUE}[INFO]${NC} $1" >&2
+}
+
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1" >&2
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1" >&2
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1" >&2
+}
+
+log_section() {
+    echo -e "\n${BOLD}${CYAN}===== $1 =====${NC}\n" >&2
+}
+
+show_help() {
+    cat << EOF
+${BOLD}Theo Local CI Validation${NC}
+
+Run all validation checks before deployment. All checks must pass.
+
+${BOLD}Usage:${NC}
+  ./check [options]
+
+${BOLD}Options:${NC}
+  -h, --help          Show this help message
+  -v, --verbose       Verbose output with detailed results
+  --fix               Auto-fix code style issues (black, ruff, isort)
+  --quick             Quick check (ruff only)
+  --with-tests        Include pytest unit tests
+
+${BOLD}Validation Checks (default):${NC}
+  1. ruff             Linting (imports, style, warnings)
+  2. black            Code formatting check
+  3. isort            Import sorting check
+  4. mypy             Type checking
+
+${BOLD}Optional (--with-tests):${NC}
+  5. pytest           Unit tests (transcription module)
+
+${BOLD}Examples:${NC}
+  ./check                  # Lint + type check only (default, fast)
+  ./check --fix            # Auto-fix style issues
+  ./check --quick          # Ruff only (fastest)
+  ./check --with-tests     # Include tests
+  ./check --verbose        # Detailed output
+
+EOF
+}
+
+# Parse command line arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -h|--help)
+            show_help
+            exit 0
+            ;;
+        -v|--verbose)
+            VERBOSE=true
+            shift
+            ;;
+        --fix)
+            FIX=true
+            shift
+            ;;
+        --quick)
+            QUICK=true
+            shift
+            ;;
+        --with-tests)
+            WITH_TESTS=true
+            shift
+            ;;
+        *)
+            log_error "Unknown option: $1"
+            show_help
+            exit 1
+            ;;
+    esac
+done
+
+# ========== VALIDATION CHECKS ==========
+
+check_ruff() {
+    log_section "Ruff - Linting"
+
+    if [ ! -d "$SRC_DIR" ]; then
+        log_error "Source directory not found: $SRC_DIR"
+        ((CHECKS_FAILED++))
+        FAILED_CHECKS+=("ruff")
+        return 1
+    fi
+
+    if [ "$FIX" = true ]; then
+        log_info "Auto-fixing with ruff..."
+        if uv run ruff check "$SRC_DIR" --fix --quiet 2>/dev/null; then
+            log_success "Ruff issues fixed"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Ruff auto-fix failed or found unfixable issues"
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("ruff")
+            return 1
+        fi
+    else
+        log_info "Running linting checks..."
+        if uv run ruff check "$SRC_DIR" --quiet 2>/dev/null; then
+            log_success "No linting issues found"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Linting issues found"
+            if [ "$VERBOSE" = true ]; then
+                uv run ruff check "$SRC_DIR"
+            else
+                log_info "Run with --verbose to see details, or --fix to auto-fix"
+            fi
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("ruff")
+            return 1
+        fi
+    fi
+}
+
+check_black() {
+    log_section "Black - Code Formatting"
+
+    if [ ! -d "$SRC_DIR" ]; then
+        log_error "Source directory not found: $SRC_DIR"
+        ((CHECKS_FAILED++))
+        FAILED_CHECKS+=("black")
+        return 1
+    fi
+
+    if [ "$FIX" = true ]; then
+        log_info "Auto-fixing code formatting..."
+        if uv run black "$SRC_DIR" --quiet 2>/dev/null; then
+            log_success "Code formatted successfully"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Black formatting failed"
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("black")
+            return 1
+        fi
+    else
+        log_info "Checking code formatting..."
+        if uv run black "$SRC_DIR" --check --quiet 2>/dev/null; then
+            log_success "Code formatting is correct"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Code formatting issues found"
+            if [ "$VERBOSE" = true ]; then
+                uv run black "$SRC_DIR" --diff
+            else
+                log_info "Run with --verbose to see details, or --fix to auto-fix"
+            fi
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("black")
+            return 1
+        fi
+    fi
+}
+
+check_isort() {
+    log_section "isort - Import Sorting"
+
+    if [ ! -d "$SRC_DIR" ]; then
+        log_error "Source directory not found: $SRC_DIR"
+        ((CHECKS_FAILED++))
+        FAILED_CHECKS+=("isort")
+        return 1
+    fi
+
+    if [ "$FIX" = true ]; then
+        log_info "Auto-fixing import sorting..."
+        if uv run isort "$SRC_DIR" --quiet 2>/dev/null; then
+            log_success "Imports sorted successfully"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "isort failed"
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("isort")
+            return 1
+        fi
+    else
+        log_info "Checking import sorting..."
+        if uv run isort "$SRC_DIR" --check --quiet 2>/dev/null; then
+            log_success "Import sorting is correct"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Import sorting issues found"
+            if [ "$VERBOSE" = true ]; then
+                uv run isort "$SRC_DIR" --diff
+            else
+                log_info "Run with --verbose to see details, or --fix to auto-fix"
+            fi
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("isort")
+            return 1
+        fi
+    fi
+}
+
+check_mypy() {
+    log_section "Mypy - Type Checking"
+
+    if [ ! -d "$SRC_DIR" ]; then
+        log_error "Source directory not found: $SRC_DIR"
+        ((CHECKS_FAILED++))
+        FAILED_CHECKS+=("mypy")
+        return 1
+    fi
+
+    log_info "Running type checks..."
+    if [ "$VERBOSE" = true ]; then
+        if uv run mypy "$SRC_DIR"; then
+            log_success "No type errors found"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Type errors found"
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("mypy")
+            return 1
+        fi
+    else
+        if uv run mypy "$SRC_DIR" --no-error-summary 2>/dev/null; then
+            log_success "No type errors found"
+            ((CHECKS_PASSED++))
+            return 0
+        else
+            log_error "Type errors found"
+            log_info "Run with --verbose to see details"
+            ((CHECKS_FAILED++))
+            FAILED_CHECKS+=("mypy")
+            return 1
+        fi
+    fi
+}
+
+check_pytest() {
+    log_section "PyTest - Unit Tests (transcription)"
+
+    if [ ! -d "$TESTS_DIR" ]; then
+        log_warning "Tests directory not found: $TESTS_DIR"
+        log_info "Skipping tests - transcription module not yet implemented"
+        return 0
+    fi
+
+    log_info "Running unit tests..."
+
+    local pytest_args=("$TESTS_DIR")
+
+    if [ "$VERBOSE" = true ]; then
+        pytest_args+=("-v")
+    else
+        pytest_args+=("-q" "--tb=line")
+    fi
+
+    cd "$PROJECT_ROOT"
+    if uv run pytest "${pytest_args[@]}"; then
+        log_success "All tests passed"
+        ((CHECKS_PASSED++))
+        return 0
+    else
+        log_error "Tests failed"
+        ((CHECKS_FAILED++))
+        FAILED_CHECKS+=("pytest")
+        return 1
+    fi
+}
+
+# ========== MAIN EXECUTION ==========
+
+log_section "Theo Local CI Validation"
+log_info "Project root: $PROJECT_ROOT"
+log_info "Source dir: $SRC_DIR"
+
+# Verify source directory exists
+if [ ! -d "$SRC_DIR" ]; then
+    log_error "Source directory not found: $SRC_DIR"
+    exit 1
+fi
+
+# Run checks
+check_ruff || true
+
+if [ "$QUICK" != true ]; then
+    check_black || true
+    check_isort || true
+    check_mypy || true
+
+    if [ "$WITH_TESTS" = true ]; then
+        check_pytest || true
+    fi
+fi
+
+# ========== SUMMARY ==========
+log_section "Validation Results"
+echo ""
+
+if [ $CHECKS_FAILED -eq 0 ]; then
+    echo -e "${GREEN}${BOLD}✓ All Validation Stages Passed${NC}"
+    echo ""
+    echo -e "${GREEN}Validation Stages:${NC}"
+    echo "  ✓ Linting (ruff)"
+    if [ "$QUICK" != true ]; then
+        echo "  ✓ Code Formatting (black)"
+        echo "  ✓ Import Sorting (isort)"
+        echo "  ✓ Type Checking (mypy)"
+        if [ "$WITH_TESTS" = true ]; then
+            echo "  ✓ Unit Tests (pytest)"
+        fi
+    fi
+    echo ""
+    echo -e "${GREEN}${BOLD}Ready to commit!${NC}"
+    exit 0
+else
+    log_error "Validation failed. Fix the errors above:"
+    echo ""
+    for check in "${FAILED_CHECKS[@]}"; do
+        echo -e "${RED}  ✗ ${check}${NC}"
+    done
+    echo ""
+    if [ "$FIX" != true ]; then
+        log_info "Try './check --fix' to auto-fix style issues."
+    fi
+    exit 1
+fi

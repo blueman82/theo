@@ -187,9 +187,7 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
 
     try:
         # 1. Initialize embedding provider (MLX or Ollama based on config)
-        logger.info(
-            f"Initializing embedding provider (backend={args.embedding_backend})"
-        )
+        logger.info(f"Initializing embedding provider (backend={args.embedding_backend})")
         from theo.embedding import create_embedding_provider
 
         embedder = create_embedding_provider(

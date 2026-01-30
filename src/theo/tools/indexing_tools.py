@@ -179,17 +179,19 @@ class IndexingTools:
             embed_result = self._daemon.embed(chunk_texts)
 
             if not embed_result.get("success"):
+                err = embed_result.get("error", "Unknown error")
                 return {
                     "success": False,
-                    "error": f"Embedding generation failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Embedding generation failed: {err}",
                 }
 
             embeddings = embed_result.get("data", {}).get("embeddings", [])
 
             if len(embeddings) != len(chunks):
+                expected, got = len(chunks), len(embeddings)
                 return {
                     "success": False,
-                    "error": f"Embedding count mismatch: expected {len(chunks)}, got {len(embeddings)}",
+                    "error": f"Embedding count mismatch: expected {expected}, got {got}",
                 }
 
             # Store each chunk using SQLiteStore.add_memory
@@ -309,10 +311,12 @@ class IndexingTools:
                     total_chunks += result.get("data", {}).get("chunks_created", 0)
                     indexed_files.append(str(file_path))
                 else:
-                    failed_files.append({
-                        "file": str(file_path),
-                        "error": result.get("error", "Unknown error"),
-                    })
+                    failed_files.append(
+                        {
+                            "file": str(file_path),
+                            "error": result.get("error", "Unknown error"),
+                        }
+                    )
 
             logger.info(
                 f"Indexed directory {path}: {files_indexed} files, "
@@ -373,17 +377,21 @@ class IndexingTools:
                     if file_path.suffix.lower() == ".pdf":
                         content = file_path.read_bytes().decode("utf-8", errors="replace")
                     else:
-                        failed_files.append({
-                            "file": str(file_path),
-                            "error": "Cannot read file as text",
-                        })
+                        failed_files.append(
+                            {
+                                "file": str(file_path),
+                                "error": "Cannot read file as text",
+                            }
+                        )
                         continue
 
                 if not content.strip():
-                    failed_files.append({
-                        "file": str(file_path),
-                        "error": "File is empty",
-                    })
+                    failed_files.append(
+                        {
+                            "file": str(file_path),
+                            "error": "File is empty",
+                        }
+                    )
                     continue
 
                 # Get chunker and split content
@@ -391,31 +399,37 @@ class IndexingTools:
                 chunks = chunker.chunk(content, str(file_path))
 
                 if not chunks:
-                    failed_files.append({
-                        "file": str(file_path),
-                        "error": "No chunks generated",
-                    })
+                    failed_files.append(
+                        {
+                            "file": str(file_path),
+                            "error": "No chunks generated",
+                        }
+                    )
                     continue
 
                 # Convert chunks to dicts for daemon
                 for i, chunk in enumerate(chunks):
                     doc_hash = self._compute_hash(chunk.text)
-                    all_chunks.append({
-                        "content": chunk.text,
-                        "source_file": str(file_path),
-                        "chunk_index": i,
-                        "namespace": namespace,
-                        "doc_hash": doc_hash,
-                        "metadata": chunk.metadata,
-                    })
+                    all_chunks.append(
+                        {
+                            "content": chunk.text,
+                            "source_file": str(file_path),
+                            "chunk_index": i,
+                            "namespace": namespace,
+                            "doc_hash": doc_hash,
+                            "metadata": chunk.metadata,
+                        }
+                    )
 
                 files_processed += 1
 
             except Exception as e:
-                failed_files.append({
-                    "file": str(file_path),
-                    "error": str(e),
-                })
+                failed_files.append(
+                    {
+                        "file": str(file_path),
+                        "error": str(e),
+                    }
+                )
 
         if not all_chunks:
             return {
@@ -437,7 +451,7 @@ class IndexingTools:
         pending_total = 0
 
         for i in range(0, len(all_chunks), BATCH_SIZE):
-            batch = all_chunks[i:i + BATCH_SIZE]
+            batch = all_chunks[i : i + BATCH_SIZE]
             index_result = self._daemon.send("index", chunks=batch, namespace=namespace)
 
             if not index_result.get("success"):
@@ -468,6 +482,6 @@ class IndexingTools:
                 "namespace": namespace,
                 "async_mode": True,
                 "message": f"Queued {queued} chunks for background indexing. "
-                          f"Use get_index_stats to monitor progress.",
+                f"Use get_index_stats to monitor progress.",
             },
         }

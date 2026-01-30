@@ -38,6 +38,7 @@ _env_file = _theo_root / ".env"
 if _env_file.exists():
     try:
         from dotenv import load_dotenv
+
         load_dotenv(_env_file)
     except ImportError:
         # Read .env manually if dotenv not available

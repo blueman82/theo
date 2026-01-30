@@ -19,7 +19,6 @@ from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # =============================================================================
 # Result Types for Memory Operations
 # =============================================================================

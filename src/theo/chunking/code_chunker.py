@@ -52,9 +52,7 @@ class CodeChunker(AbstractChunker):
             return self._chunk_by_definitions(content, source_file, ast_module)
         else:
             # Parsing failed, fall back to line-based chunking
-            logger.warning(
-                f"Failed to parse {source_file} as Python, using line-based chunking"
-            )
+            logger.warning(f"Failed to parse {source_file} as Python, using line-based chunking")
             return self._fallback_line_chunking(content, source_file)
 
     def _parse_ast(self, content: str) -> Optional[ast.Module]:
@@ -94,9 +92,7 @@ class CodeChunker(AbstractChunker):
             if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 start_line, end_line = self._get_node_lines(node)
                 def_type = (
-                    "async_function"
-                    if isinstance(node, ast.AsyncFunctionDef)
-                    else "function"
+                    "async_function" if isinstance(node, ast.AsyncFunctionDef) else "function"
                 )
                 definitions.append((def_type, start_line, end_line, None))
 
@@ -221,9 +217,7 @@ class CodeChunker(AbstractChunker):
                 if len(definition_content) > max_chars:
                     # For classes, try method-level splitting first
                     if def_type == "class" and class_name:
-                        split_chunks = self._split_class_by_methods(
-                            chunk, class_name, chunk_index
-                        )
+                        split_chunks = self._split_class_by_methods(chunk, class_name, chunk_index)
                     else:
                         # For functions/other, use base class line-based splitting
                         split_chunks = self.split_oversized_chunk(

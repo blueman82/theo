@@ -20,9 +20,7 @@ class MarkdownChunker(AbstractChunker):
         max_tokens: Maximum tokens per chunk (enforced via split_oversized_chunk)
     """
 
-    def __init__(
-        self, chunk_size: int = 1000, chunk_overlap: int = 200, max_tokens: int = 256
-    ):
+    def __init__(self, chunk_size: int = 1000, chunk_overlap: int = 200, max_tokens: int = 256):
         """Initialize markdown chunker.
 
         Args:
@@ -165,9 +163,7 @@ class MarkdownChunker(AbstractChunker):
 
         return sections
 
-    def _chunk_section(
-        self, section: dict, source_file: str, start_index: int
-    ) -> list[Chunk]:
+    def _chunk_section(self, section: dict, source_file: str, start_index: int) -> list[Chunk]:
         """Create chunks from a single section.
 
         If section content fits in chunk_size, creates single chunk.
@@ -203,9 +199,7 @@ class MarkdownChunker(AbstractChunker):
         # Content is too long, split by paragraphs
         return self._chunk_long_section(section, source_file, start_index)
 
-    def _chunk_long_section(
-        self, section: dict, source_file: str, start_index: int
-    ) -> list[Chunk]:
+    def _chunk_long_section(self, section: dict, source_file: str, start_index: int) -> list[Chunk]:
         """Split long section content into multiple chunks with overlap.
 
         Splits by paragraphs (blank lines) and ensures overlap between chunks
@@ -265,9 +259,7 @@ class MarkdownChunker(AbstractChunker):
             else:
                 # Add paragraph to current chunk
                 current_chunk.append(para)
-                current_length += para_length + (
-                    2 if current_chunk else 0
-                )  # +2 for \n\n separator
+                current_length += para_length + (2 if current_chunk else 0)  # +2 for \n\n separator
 
         # Add final chunk if any content remains
         if current_chunk:

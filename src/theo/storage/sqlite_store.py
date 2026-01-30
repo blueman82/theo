@@ -48,6 +48,7 @@ class SearchResult:
     chunk_index: int
     metadata: dict | None = None
 
+
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
 
@@ -112,7 +113,8 @@ class SQLiteStore:
         cursor = self._conn.cursor()
 
         # Create edges table for relationship graph
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS edges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source_id TEXT NOT NULL,
@@ -123,32 +125,42 @@ class SQLiteStore:
                 metadata TEXT,
                 UNIQUE(source_id, target_id, edge_type)
             )
-        """)
+        """
+        )
 
         # Create indexes for efficient graph traversal
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_edges_source
             ON edges(source_id)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_edges_target
             ON edges(target_id)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_edges_type
             ON edges(edge_type)
-        """)
+        """
+        )
 
         # Create schema version table for future migrations
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS schema_version (
                 version INTEGER PRIMARY KEY,
                 applied_at REAL NOT NULL
             )
-        """)
+        """
+        )
 
         # Create validation_events table for TRY/LEARN cycle tracking
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS validation_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 memory_id TEXT NOT NULL,
@@ -157,24 +169,30 @@ class SQLiteStore:
                 session_id TEXT,
                 created_at REAL NOT NULL
             )
-        """)
+        """
+        )
 
         # Create index for validation event queries
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_validation_memory
             ON validation_events(memory_id)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_validation_type
             ON validation_events(event_type)
-        """)
+        """
+        )
 
         # =====================================================================
         # Memory Storage Tables (sqlite-vec migration - schema v2)
         # =====================================================================
 
         # Memory content and metadata
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS memories (
                 id TEXT PRIMARY KEY,
                 content TEXT NOT NULL,
@@ -202,18 +220,22 @@ class SQLiteStore:
                 -- Additional metadata as JSON
                 tags TEXT
             )
-        """)
+        """
+        )
 
         # Vector embeddings (sqlite-vec) - MLX uses 1024 dimensions
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(
                 id TEXT PRIMARY KEY,
                 embedding FLOAT[1024]
             )
-        """)
+        """
+        )
 
         # Full-text search (FTS5)
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
                 content,
                 id UNINDEXED,
@@ -221,10 +243,12 @@ class SQLiteStore:
                 namespace UNINDEXED,
                 source_file UNINDEXED
             )
-        """)
+        """
+        )
 
         # Embedding cache (avoid re-computation)
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS embedding_cache (
                 content_hash TEXT NOT NULL,
                 provider TEXT NOT NULL,
@@ -234,43 +258,62 @@ class SQLiteStore:
                 created_at REAL NOT NULL,
                 PRIMARY KEY (content_hash, provider, model)
             )
-        """)
+        """
+        )
 
         # Indexes for memories
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_memories_type
             ON memories(memory_type)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_memories_namespace
             ON memories(namespace)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_memories_confidence
             ON memories(confidence DESC)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_memories_source_file
             ON memories(source_file)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_memories_hash
             ON memories(content_hash)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_embedding_cache_hash
             ON embedding_cache(content_hash)
-        """)
+        """
+        )
 
         # Record schema version 2 (sqlite-vec migration)
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT OR IGNORE INTO schema_version (version, applied_at)
             VALUES (1, ?)
-        """, (time.time(),))
-        cursor.execute("""
+        """,
+            (time.time(),),
+        )
+        cursor.execute(
+            """
             INSERT OR IGNORE INTO schema_version (version, applied_at)
             VALUES (2, ?)
-        """, (time.time(),))
+        """,
+            (time.time(),),
+        )
 
         self._conn.commit()
 

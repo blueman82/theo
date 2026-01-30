@@ -300,9 +300,7 @@ class ValidationLoop:
                     updated = self._store.update_memory(doc_id, confidence=new_confidence)
                     if updated:
                         decayed_ids.append(doc_id)
-                        logger.debug(
-                            f"Decayed {doc_id}: {confidence:.2f} -> {new_confidence:.2f}"
-                        )
+                        logger.debug(f"Decayed {doc_id}: {confidence:.2f} -> {new_confidence:.2f}")
 
             logger.info(
                 f"Decay complete: {len(decayed_ids)} decayed, {skipped_golden} golden rules skipped"

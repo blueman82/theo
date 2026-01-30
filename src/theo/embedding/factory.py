@@ -107,6 +107,5 @@ def create_embedding_provider(
             # This should never happen with proper type hints, but provides
             # a clear error message if it does
             raise ValueError(
-                f"Unknown embedding backend: {backend!r}. "
-                f"Valid options are: 'mlx', 'ollama'"
+                f"Unknown embedding backend: {backend!r}. " f"Valid options are: 'mlx', 'ollama'"
             )

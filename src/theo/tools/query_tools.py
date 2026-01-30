@@ -13,7 +13,8 @@ import logging
 from typing import Any, Optional
 
 from theo.daemon import DaemonClient
-from theo.storage.sqlite_store import SQLiteStore, SearchResult as SQLiteSearchResult
+from theo.storage.sqlite_store import SearchResult as SQLiteSearchResult
+from theo.storage.sqlite_store import SQLiteStore
 from theo.validation import FeedbackCollector, UsageFeedback
 from theo.validation.feedback import FeedbackType
 
@@ -163,7 +164,7 @@ class QueryTools:
             if not embed_result.get("success"):
                 return {
                     "success": False,
-                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown')}",
                 }
 
             query_embedding = embed_result.get("data", {}).get("embedding", [])
@@ -184,10 +185,7 @@ class QueryTools:
             self._record_feedback(results, query)
 
             # Convert results to response format
-            results_data = [
-                self._result_to_dict(result, i)
-                for i, result in enumerate(results)
-            ]
+            results_data = [self._result_to_dict(result, i) for i, result in enumerate(results)]
 
             # Calculate total tokens in results
             total_tokens = sum(r["token_estimate"] for r in results_data)
@@ -241,7 +239,7 @@ class QueryTools:
             if not embed_result.get("success"):
                 return {
                     "success": False,
-                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown')}",
                 }
 
             query_embedding = embed_result.get("data", {}).get("embedding", [])
@@ -264,10 +262,7 @@ class QueryTools:
             self._record_feedback(results, query)
 
             # Convert results to response format
-            results_data = [
-                self._result_to_dict(result, i)
-                for i, result in enumerate(results)
-            ]
+            results_data = [self._result_to_dict(result, i) for i, result in enumerate(results)]
 
             # Calculate total tokens in results
             total_tokens = sum(r["token_estimate"] for r in results_data)
@@ -329,7 +324,7 @@ class QueryTools:
             if not embed_result.get("success"):
                 return {
                     "success": False,
-                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown')}",
                 }
 
             query_embedding = embed_result.get("data", {}).get("embedding", [])
@@ -421,7 +416,7 @@ class QueryTools:
             if not embed_result.get("success"):
                 return {
                     "success": False,
-                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown error')}",
+                    "error": f"Query embedding failed: {embed_result.get('error', 'Unknown')}",
                 }
 
             query_embedding = embed_result.get("data", {}).get("embedding", [])
@@ -446,10 +441,7 @@ class QueryTools:
             self._record_feedback(results, query)
 
             # Convert results to response format
-            results_data = [
-                self._result_to_dict(result, i)
-                for i, result in enumerate(results)
-            ]
+            results_data = [self._result_to_dict(result, i) for i, result in enumerate(results)]
 
             # Calculate total tokens in results
             total_tokens = sum(r["token_estimate"] for r in results_data)

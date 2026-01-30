@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class HybridStoreError(Exception):
     """Custom exception for hybrid storage operations."""
+
     pass
 
 
@@ -92,9 +93,7 @@ class HybridStore:
             # Use settings defaults if paths not provided
             settings = TheoSettings()
 
-            sqlite_store = SQLiteStore(
-                db_path=sqlite_path or settings.get_sqlite_path()
-            )
+            sqlite_store = SQLiteStore(db_path=sqlite_path or settings.get_sqlite_path())
 
             # Use provided embedding client or create new one
             if embedding_client is None:
@@ -274,16 +273,18 @@ class HybridStore:
                 if memory_type and r.memory_type != memory_type:
                     continue
 
-                memories.append({
-                    "id": r.id,
-                    "content": r.content,
-                    "type": r.memory_type,
-                    "namespace": r.namespace,
-                    "importance": r.importance,
-                    "confidence": r.confidence,
-                    "similarity": r.score,
-                    "metadata": r.metadata,
-                })
+                memories.append(
+                    {
+                        "id": r.id,
+                        "content": r.content,
+                        "type": r.memory_type,
+                        "namespace": r.namespace,
+                        "importance": r.importance,
+                        "confidence": r.confidence,
+                        "similarity": r.score,
+                        "metadata": r.metadata,
+                    }
+                )
 
                 # Stop once we have enough results after filtering
                 if len(memories) >= n_results:
@@ -529,16 +530,18 @@ class HybridStore:
         # Convert to HybridStore format
         memories = []
         for r in results:
-            memories.append({
-                "id": r["id"],
-                "content": r["content"],
-                "type": r["memory_type"],
-                "namespace": r["namespace"],
-                "importance": r["importance"],
-                "confidence": r["confidence"],
-                "created_at": r.get("created_at"),
-                "accessed_at": r.get("last_accessed"),
-            })
+            memories.append(
+                {
+                    "id": r["id"],
+                    "content": r["content"],
+                    "type": r["memory_type"],
+                    "namespace": r["namespace"],
+                    "importance": r["importance"],
+                    "confidence": r["confidence"],
+                    "created_at": r.get("created_at"),
+                    "accessed_at": r.get("last_accessed"),
+                }
+            )
 
         return memories
 
