@@ -88,5 +88,5 @@ line_length = 100
 
 [dependency-groups]
 dev = [
-    "chromadb>=1.4.1",
+    "chromadb",
 ]
