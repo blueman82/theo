@@ -29,20 +29,20 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     # Testing
-    "pytest>=9.0.1",
-    "pytest-asyncio>=0.24.0",
-    "pytest-cov>=7.0.0",
-    "pytest-httpx>=0.32.0",
-    "pytest-mock>=3.14.0",
-    "pytest-xdist>=3.5.0",
-    "pytest-timeout>=2.3.0",
+    "pytest",
+    "pytest-asyncio",
+    "pytest-cov",
+    "pytest-httpx",
+    "pytest-mock",
+    "pytest-xdist",
+    "pytest-timeout",
     # Code Quality
-    "black>=25.12.0",
-    "ruff>=0.14.10",
-    "mypy>=1.8.0",
-    "isort>=7.0.0",
-    "types-requests>=2.31.0",
-    "pydocstyle>=6.3.0",
+    "black",
+    "ruff",
+    "mypy",
+    "isort",
+    "types-requests",
+    "pydocstyle",
 ]
 
 [tool.hatch.build.targets.wheel]
