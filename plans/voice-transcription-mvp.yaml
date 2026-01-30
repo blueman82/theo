@@ -1,0 +1,801 @@
+conductor:
+  worktree_groups:
+    - group_id: "foundation"
+      tasks: [1, 2]
+      rationale: "Types and audio capture must exist before transcriber"
+    - group_id: "core"
+      tasks: [3, 4]
+      rationale: "Transcriber depends on types/audio; storage depends on transcriber output"
+    - group_id: "interface"
+      tasks: [5]
+      rationale: "TUI integrates all components"
+    - group_id: "testing"
+      tasks: [6]
+      rationale: "Tests verify complete integration"
+
+planner_compliance:
+  planner_version: "4.2.0"
+  strict_enforcement: true
+  required_features: [dependency_checks, test_commands, success_criteria, data_flow_registry]
+
+data_flow_registry:
+  producers:
+    transcription_types:
+      - task: 1
+        description: "Creates TranscriptionSegment, TranscriptionSession dataclasses"
+    audio_capture:
+      - task: 2
+        description: "Creates AudioCapture class with start/stop/get_audio methods"
+    transcriber:
+      - task: 3
+        description: "Creates StreamingTranscriber with transcribe_stream() generator"
+    storage_integration:
+      - task: 4
+        description: "Creates TranscriptionStorage.save_session() method"
+  consumers:
+    transcription_types:
+      - task: 3
+        description: "StreamingTranscriber yields TranscriptionSegment"
+      - task: 4
+        description: "TranscriptionStorage stores TranscriptionSession"
+      - task: 5
+        description: "TUI displays TranscriptionSegment"
+    audio_capture:
+      - task: 3
+        description: "StreamingTranscriber consumes audio from AudioCapture"
+      - task: 5
+        description: "TUI controls AudioCapture start/stop"
+    transcriber:
+      - task: 5
+        description: "TUI iterates StreamingTranscriber generator"
+    storage_integration:
+      - task: 5
+        description: "TUI calls save_session on stop"
+
+plan:
+  metadata:
+    feature_name: "Voice Transcription MVP"
+    created: "2026-01-30"
+    target: "Real-time microphone transcription with Theo storage integration"
+
+  context:
+    framework: "Python 3.13"
+    test_framework: "pytest"
+    audio_library: "mlx-audio 0.3.1 with sounddevice"
+    model: "mlx-community/whisper-turbo"
+    sample_rate: 16000
+
+  tasks:
+    - task_number: "1"
+      name: "Create transcription types"
+      agent: "python-pro"
+      files:
+        - "src/theo/transcription/__init__.py"
+        - "src/theo/transcription/types.py"
+      depends_on: []
+
+      success_criteria:
+        - "TranscriptionSegment dataclass with fields: text, start_time, end_time, is_final, confidence"
+        - "TranscriptionSession dataclass with fields: id, segments, start_time, end_time, source (mic/file), metadata"
+        - "AudioChunk dataclass with fields: data (np.ndarray), timestamp, sample_rate"
+        - "All types have full type hints and frozen=True where appropriate"
+        - "Factory method TranscriptionSession.to_memory_document() converts to MemoryDocument"
+        - "No TODO comments in production code"
+
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/transcription/test_types.py -v"
+
+      runtime_metadata:
+        dependency_checks:
+          - command: "uv run python -c 'from theo.transcription.types import TranscriptionSegment, TranscriptionSession, AudioChunk'"
+            description: "Verify types can be imported"
+        documentation_targets: []
+
+      description: |
+        <task_description>
+        Create the core type definitions for the transcription module.
+
+        Location: src/theo/transcription/types.py
+
+        Types to create:
+
+        1. AudioChunk (frozen dataclass):
+           - data: np.ndarray (mono audio samples)
+           - timestamp: float (seconds since recording start)
+           - sample_rate: int (always 16000)
+
+        2. TranscriptionSegment (frozen dataclass):
+           - text: str
+           - start_time: float (seconds)
+           - end_time: float (seconds)
+           - is_final: bool (True if committed, False if partial)
+           - confidence: float (0.0-1.0, default 0.8)
+
+        3. TranscriptionSession (dataclass, mutable):
+           - id: str (UUID)
+           - segments: list[TranscriptionSegment]
+           - start_time: datetime
+           - end_time: Optional[datetime]
+           - source: Literal["microphone", "file"]
+           - metadata: dict[str, Any]
+
+           Methods:
+           - add_segment(segment: TranscriptionSegment) -> None
+           - get_full_text() -> str (concatenate final segments)
+           - to_memory_document() -> MemoryDocument (factory method)
+           - duration_seconds() -> float
+
+        The to_memory_document() method should:
+        - Use MemoryDocument.from_memory() factory
+        - Set memory_type=MemoryType.DOCUMENT
+        - Set namespace from metadata.get("namespace", "default")
+        - Include source, duration, segment_count in metadata
+        </task_description>
+
+      implementation:
+        approach: |
+          Create frozen dataclasses for immutable types (AudioChunk, TranscriptionSegment).
+          Create mutable dataclass for TranscriptionSession since segments accumulate.
+          Import MemoryDocument and MemoryType from theo.types for conversion.
+        key_points:
+          - point: "TranscriptionSegment dataclass"
+            details: "Fields: text (str), start_time (float), end_time (float), is_final (bool), confidence (float=0.8)"
+            reference: "src/theo/transcription/types.py:TranscriptionSegment"
+          - point: "TranscriptionSession dataclass"
+            details: "Fields: id (str), segments (list), start_time (datetime), end_time (Optional[datetime]), source (Literal), metadata (dict)"
+            reference: "src/theo/transcription/types.py:TranscriptionSession"
+          - point: "AudioChunk dataclass"
+            details: "Fields: data (np.ndarray), timestamp (float), sample_rate (int=16000)"
+            reference: "src/theo/transcription/types.py:AudioChunk"
+          - point: "to_memory_document() factory method"
+            details: "Converts session to MemoryDocument using from_memory() with memory_type=DOCUMENT"
+            reference: "src/theo/transcription/types.py:TranscriptionSession.to_memory_document"
+          - point: "get_full_text() method"
+            details: "Concatenates text from all segments where is_final=True"
+            reference: "src/theo/transcription/types.py:TranscriptionSession.get_full_text"
+          - point: "All types have full type hints"
+            details: "Use typing module for Optional, Literal, Any; numpy for ndarray typing"
+            reference: "src/theo/transcription/types.py"
+
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/transcription/ && uv run isort src/theo/transcription/ && uv run ruff check src/theo/transcription/ --fix && uv run mypy src/theo/transcription/"
+            exit_on_failure: true
+
+      commit:
+        type: "feat"
+        message: "Add transcription type definitions"
+        files: ["src/theo/transcription/**"]
+
+    - task_number: "2"
+      name: "Implement audio capture"
+      agent: "python-pro"
+      files:
+        - "src/theo/transcription/audio.py"
+      depends_on: [1]
+
+      success_criteria:
+        - "AudioCapture class with __init__(sample_rate=16000, channels=1, chunk_duration=1.0)"
+        - "start() method begins recording, returns None"
+        - "stop() method ends recording, returns None"
+        - "is_recording property returns bool"
+        - "get_audio_stream() generator yields AudioChunk objects"
+        - "Uses sounddevice.InputStream for capture"
+        - "Audio resampled to 16000 Hz if device sample rate differs"
+        - "Thread-safe queue for audio chunks"
+        - "Context manager support (__enter__, __exit__)"
+        - "No TODO comments in production code"
+
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/transcription/test_audio.py -v"
+
+      runtime_metadata:
+        dependency_checks:
+          - command: "uv run python -c 'import sounddevice; print(sounddevice.query_devices())'"
+            description: "Verify sounddevice can access audio devices"
+        documentation_targets: []
+
+      description: |
+        <mandatory_principles>
+        ENGINEERING: YAGNI, KISS, DRY, Fail Fast, Single Source of Truth.
+        PYTHONIC: Full type hints, EAFP (try/except), context managers for resources.
+        </mandatory_principles>
+
+        <task_description>
+        Implement microphone audio capture using sounddevice.
+
+        Location: src/theo/transcription/audio.py
+
+        Class: AudioCapture
+
+        Constructor:
+        - sample_rate: int = 16000 (required for Whisper)
+        - channels: int = 1 (mono)
+        - chunk_duration: float = 1.0 (seconds per chunk)
+        - device: Optional[int] = None (default input device)
+
+        Internal state:
+        - _stream: Optional[sd.InputStream]
+        - _queue: queue.Queue[AudioChunk]
+        - _recording: bool
+        - _start_time: Optional[float]
+
+        Methods:
+
+        start() -> None:
+          - Create sd.InputStream with callback
+          - Callback puts AudioChunk into queue
+          - Set _recording = True
+          - Record _start_time = time.time()
+
+        stop() -> None:
+          - Stop and close stream
+          - Set _recording = False
+          - Put sentinel (None) in queue
+
+        get_audio_stream() -> Generator[AudioChunk, None, None]:
+          - While True: get from queue with timeout
+          - If None sentinel, break
+          - Yield AudioChunk
+
+        Callback function (called by sounddevice):
+          - Receives indata (np.ndarray), frames, time_info, status
+          - Resample if needed using scipy.signal.resample
+          - Create AudioChunk with timestamp relative to start
+          - Put in queue (non-blocking)
+
+        Context manager:
+          - __enter__: return self
+          - __exit__: call stop() if recording
+        </task_description>
+
+      implementation:
+        approach: |
+          Use sounddevice.InputStream with callback for non-blocking capture.
+          Queue audio chunks for consumption by transcriber.
+          Handle device sample rate mismatch with scipy resampling.
+        key_points:
+          - point: "AudioCapture.__init__(sample_rate=16000, channels=1, chunk_duration=1.0)"
+            details: "Initialize with configurable sample rate, channels, chunk duration; device=None for default"
+            reference: "src/theo/transcription/audio.py:AudioCapture.__init__"
+          - point: "start() method begins recording"
+            details: "Creates sd.InputStream, sets callback, starts stream, sets _recording=True"
+            reference: "src/theo/transcription/audio.py:AudioCapture.start"
+          - point: "stop() method ends recording"
+            details: "Stops stream, closes stream, sets _recording=False, puts None sentinel in queue"
+            reference: "src/theo/transcription/audio.py:AudioCapture.stop"
+          - point: "get_audio_stream() generator yields AudioChunk"
+            details: "Loops getting from queue with timeout, yields AudioChunk, breaks on None sentinel"
+            reference: "src/theo/transcription/audio.py:AudioCapture.get_audio_stream"
+          - point: "Uses sounddevice.InputStream for capture"
+            details: "Non-blocking callback-based capture with configurable blocksize"
+            reference: "src/theo/transcription/audio.py:AudioCapture.start"
+          - point: "Thread-safe queue for audio chunks"
+            details: "queue.Queue[AudioChunk] for producer (callback) / consumer (get_audio_stream) pattern"
+            reference: "src/theo/transcription/audio.py:AudioCapture._queue"
+          - point: "Audio resampled to 16000 Hz if device sample rate differs"
+            details: "scipy.signal.resample in callback when device samplerate != 16000"
+            reference: "src/theo/transcription/audio.py:_audio_callback"
+          - point: "Context manager support"
+            details: "__enter__ returns self, __exit__ calls stop() if _recording"
+            reference: "src/theo/transcription/audio.py:AudioCapture.__enter__"
+          - point: "is_recording property"
+            details: "Returns self._recording bool"
+            reference: "src/theo/transcription/audio.py:AudioCapture.is_recording"
+
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/transcription/ && uv run isort src/theo/transcription/ && uv run ruff check src/theo/transcription/ --fix && uv run mypy src/theo/transcription/"
+            exit_on_failure: true
+
+      commit:
+        type: "feat"
+        message: "Add audio capture with sounddevice"
+        files: ["src/theo/transcription/audio.py"]
+
+    - task_number: "3"
+      name: "Implement streaming transcriber"
+      agent: "python-pro"
+      files:
+        - "src/theo/transcription/transcriber.py"
+      depends_on: [1, 2]
+
+      success_criteria:
+        - "StreamingTranscriber class with __init__(model_path='mlx-community/whisper-turbo')"
+        - "Model loaded lazily on first transcription via mlx_audio.stt.load()"
+        - "transcribe_stream(audio_capture: AudioCapture) generator yields TranscriptionSegment"
+        - "Converts AudioChunk.data to mx.array for model input"
+        - "Accumulates audio chunks into buffer for model.generate_streaming()"
+        - "Maps StreamingResult to TranscriptionSegment"
+        - "Suppresses WhisperProcessor warning with warnings.filterwarnings"
+        - "close() method releases model resources"
+        - "No TODO comments in production code"
+
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/transcription/test_transcriber.py -v"
+
+      runtime_metadata:
+        dependency_checks:
+          - command: "uv run python -c 'from mlx_audio.stt import load; print(\"mlx_audio available\")'"
+            description: "Verify mlx_audio can be imported"
+        documentation_targets: []
+
+      description: |
+        <mandatory_principles>
+        ENGINEERING: YAGNI, KISS, DRY, Fail Fast, Single Source of Truth.
+        PYTHONIC: Full type hints, EAFP (try/except), context managers.
+        </mandatory_principles>
+
+        <task_description>
+        Implement streaming transcription using mlx-audio Whisper.
+
+        Location: src/theo/transcription/transcriber.py
+
+        Class: StreamingTranscriber
+
+        Constructor:
+        - model_path: str = "mlx-community/whisper-turbo"
+        - chunk_duration: float = 1.0
+        - frame_threshold: int = 25
+        - language: Optional[str] = None (auto-detect)
+
+        Internal state:
+        - _model_path: str
+        - _model: Optional[Model] (lazy loaded)
+        - _chunk_duration: float
+        - _frame_threshold: int
+        - _language: Optional[str]
+
+        Methods:
+
+        _ensure_model() -> Model:
+          - If _model is None:
+            - Suppress warning: warnings.filterwarnings("ignore", message="Could not load WhisperProcessor")
+            - Load: self._model = load(self._model_path)
+          - Return self._model
+
+        transcribe_stream(audio_capture: AudioCapture) -> Generator[TranscriptionSegment, None, None]:
+          - Ensure model loaded
+          - Accumulate audio chunks from audio_capture.get_audio_stream()
+          - Convert to mx.array: mx.array(audio_buffer, dtype=mx.float32)
+          - Call model.generate_streaming(audio, chunk_duration=..., frame_threshold=..., language=...)
+          - For each StreamingResult:
+            - Create TranscriptionSegment(
+                text=result.text,
+                start_time=result.start_time,
+                end_time=result.end_time,
+                is_final=result.is_final,
+                confidence=0.8
+              )
+            - Yield segment
+
+        close() -> None:
+          - Set _model = None (releases GPU memory)
+
+        Context manager:
+          - __enter__: return self
+          - __exit__: call close()
+
+        mlx-audio StreamingResult fields:
+          - text: str
+          - is_final: bool
+          - start_time: float
+          - end_time: float
+          - progress: float
+          - audio_position: float
+          - audio_duration: float
+        </task_description>
+
+      implementation:
+        approach: |
+          Lazy-load model on first use to avoid startup delay.
+          Accumulate audio chunks into numpy buffer, convert to mx.array.
+          Use model.generate_streaming() for real-time transcription.
+          Map StreamingResult to our TranscriptionSegment type.
+        key_points:
+          - point: "StreamingTranscriber.__init__(model_path='mlx-community/whisper-turbo')"
+            details: "Store model_path, chunk_duration, frame_threshold, language; _model=None for lazy loading"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber.__init__"
+          - point: "Model loaded lazily via mlx_audio.stt.load()"
+            details: "_ensure_model() checks if _model is None, loads if needed, returns model"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber._ensure_model"
+          - point: "transcribe_stream(audio_capture) generator yields TranscriptionSegment"
+            details: "Accumulates audio from get_audio_stream(), calls generate_streaming(), yields mapped segments"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber.transcribe_stream"
+          - point: "Converts AudioChunk.data to mx.array"
+            details: "mx.array(np.concatenate(chunks), dtype=mx.float32)"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber.transcribe_stream"
+          - point: "Maps StreamingResult to TranscriptionSegment"
+            details: "TranscriptionSegment(text=result.text, start_time=result.start_time, end_time=result.end_time, is_final=result.is_final)"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber.transcribe_stream"
+          - point: "Suppresses WhisperProcessor warning"
+            details: "warnings.filterwarnings('ignore', message='Could not load WhisperProcessor')"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber._ensure_model"
+          - point: "close() releases model resources"
+            details: "Sets _model = None to release GPU memory"
+            reference: "src/theo/transcription/transcriber.py:StreamingTranscriber.close"
+
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/transcription/ && uv run isort src/theo/transcription/ && uv run ruff check src/theo/transcription/ --fix && uv run mypy src/theo/transcription/"
+            exit_on_failure: true
+
+      commit:
+        type: "feat"
+        message: "Add streaming transcriber with mlx-audio Whisper"
+        files: ["src/theo/transcription/transcriber.py"]
+
+    - task_number: "4"
+      name: "Implement Theo storage integration"
+      agent: "python-pro"
+      files:
+        - "src/theo/transcription/storage.py"
+      depends_on: [1]
+
+      success_criteria:
+        - "TranscriptionStorage class with __init__(hybrid_store: HybridStore)"
+        - "save_session(session: TranscriptionSession, namespace: str) -> str returns memory ID"
+        - "Converts TranscriptionSession to MemoryDocument via to_memory_document()"
+        - "Generates embedding for full transcript text"
+        - "Stores via HybridStore.add_memory()"
+        - "Returns the stored memory ID"
+        - "No TODO comments in production code"
+
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/transcription/test_storage.py -v"
+
+      runtime_metadata:
+        dependency_checks:
+          - command: "uv run python -c 'from theo.storage.hybrid import HybridStore'"
+            description: "Verify HybridStore can be imported"
+        documentation_targets: []
+
+      description: |
+        <task_description>
+        Implement storage integration to save transcriptions to Theo.
+
+        Location: src/theo/transcription/storage.py
+
+        Class: TranscriptionStorage
+
+        Constructor:
+        - hybrid_store: HybridStore (injected dependency)
+
+        Methods:
+
+        save_session(session: TranscriptionSession, namespace: str = "default") -> str:
+          - Set session.metadata["namespace"] = namespace
+          - Convert: doc = session.to_memory_document()
+          - Store: result = self._store.add_memory(doc)
+          - Return result.id
+
+        The TranscriptionSession.to_memory_document() (from Task 1) handles:
+          - Creating MemoryDocument with memory_type=DOCUMENT
+          - Setting content to full transcript text
+          - Including metadata (source, duration, segment_count)
+
+        HybridStore.add_memory():
+          - Generates embedding automatically
+          - Stores in SQLite (memories + memories_vec + memories_fts)
+          - Returns the stored MemoryDocument with ID
+        </task_description>
+
+      implementation:
+        approach: |
+          Simple wrapper that uses TranscriptionSession's factory method
+          and delegates storage to HybridStore.
+        key_points:
+          - point: "TranscriptionStorage.__init__(hybrid_store: HybridStore)"
+            details: "Stores reference to HybridStore for storage operations"
+            reference: "src/theo/transcription/storage.py:TranscriptionStorage.__init__"
+          - point: "save_session(session, namespace) returns memory ID"
+            details: "Sets namespace in metadata, converts to MemoryDocument, calls add_memory, returns ID"
+            reference: "src/theo/transcription/storage.py:TranscriptionStorage.save_session"
+          - point: "Converts via to_memory_document()"
+            details: "Uses session.to_memory_document() factory method from Task 1"
+            reference: "src/theo/transcription/storage.py:TranscriptionStorage.save_session"
+          - point: "Stores via HybridStore.add_memory()"
+            details: "HybridStore handles embedding generation and SQLite storage"
+            reference: "src/theo/transcription/storage.py:TranscriptionStorage.save_session"
+
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/transcription/ && uv run isort src/theo/transcription/ && uv run ruff check src/theo/transcription/ --fix && uv run mypy src/theo/transcription/"
+            exit_on_failure: true
+
+      commit:
+        type: "feat"
+        message: "Add transcription storage integration with Theo"
+        files: ["src/theo/transcription/storage.py"]
+
+    - task_number: "5"
+      name: "Implement TUI interface"
+      agent: "cli-developer"
+      files:
+        - "src/theo/transcription/tui.py"
+        - "src/theo/transcription/__main__.py"
+      depends_on: [2, 3, 4]
+
+      success_criteria:
+        - "TranscriptionTUI class using rich library for terminal UI"
+        - "Live display panel showing current transcription"
+        - "Status bar showing recording state, duration, segment count"
+        - "Keyboard controls: SPACE to start/stop, Q to quit, S to save"
+        - "run() method starts the TUI event loop"
+        - "Integrates AudioCapture, StreamingTranscriber, TranscriptionStorage"
+        - "Shows partial (gray) vs final (white) text segments"
+        - "__main__.py entry point: python -m theo.transcription"
+        - "CLI args: --model, --namespace, --language"
+        - "No TODO comments in production code"
+
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run python -c 'from theo.transcription.tui import TranscriptionTUI'"
+
+      runtime_metadata:
+        dependency_checks:
+          - command: "uv run python -c 'from rich.live import Live; from rich.panel import Panel'"
+            description: "Verify rich library available"
+        documentation_targets: []
+
+      description: |
+        <mandatory_principles>
+        ENGINEERING: YAGNI, KISS, DRY, Fail Fast, Single Source of Truth.
+        PYTHONIC: Full type hints, context managers for resources.
+        </mandatory_principles>
+
+        <task_description>
+        Implement a terminal UI for real-time transcription.
+
+        Location: src/theo/transcription/tui.py
+
+        Dependencies: rich (already in Theo deps via MCP)
+
+        Class: TranscriptionTUI
+
+        Constructor:
+        - model_path: str = "mlx-community/whisper-turbo"
+        - namespace: str = "default"
+        - language: Optional[str] = None
+        - hybrid_store: Optional[HybridStore] = None (for testing)
+
+        Components:
+        - AudioCapture instance
+        - StreamingTranscriber instance
+        - TranscriptionStorage instance (if hybrid_store provided)
+        - TranscriptionSession for current recording
+
+        UI Layout (using rich):
+        ```
+        ╭─ Theo Voice Transcription ─────────────────────╮
+        │                                                 │
+        │ [Partial text in dim style...]                 │
+        │ Final text in normal style.                    │
+        │ More final text.                               │
+        │                                                 │
+        ╰─────────────────────────────────────────────────╯
+
+        Status: Recording | Duration: 00:45 | Segments: 12
+
+        Controls: [SPACE] Start/Stop | [S] Save | [Q] Quit
+        ```
+
+        Methods:
+
+        run() -> None:
+          - Setup keyboard listener (pynput or simple stdin)
+          - Create rich Live context
+          - Main loop:
+            - If recording: consume transcriber stream, update display
+            - Handle key events
+            - Update status bar
+          - Cleanup on exit
+
+        _handle_key(key: str) -> bool:
+          - SPACE: toggle recording (start/stop)
+          - S: save current session to Theo
+          - Q: return False to exit
+          - Return True to continue
+
+        _render() -> Panel:
+          - Build rich Panel with current transcript
+          - Partial segments in dim style
+          - Final segments in normal style
+          - Status bar at bottom
+
+        __main__.py:
+        ```python
+        import argparse
+        from theo.transcription.tui import TranscriptionTUI
+
+        def main():
+            parser = argparse.ArgumentParser()
+            parser.add_argument("--model", default="mlx-community/whisper-turbo")
+            parser.add_argument("--namespace", default="default")
+            parser.add_argument("--language", default=None)
+            args = parser.parse_args()
+
+            tui = TranscriptionTUI(
+                model_path=args.model,
+                namespace=args.namespace,
+                language=args.language,
+            )
+            tui.run()
+
+        if __name__ == "__main__":
+            main()
+        ```
+        </task_description>
+
+      implementation:
+        approach: |
+          Use rich.live.Live for real-time terminal updates.
+          Use threading for keyboard input (non-blocking).
+          Accumulate segments in TranscriptionSession.
+          Simple state machine: IDLE -> RECORDING -> IDLE.
+        key_points:
+          - point: "TranscriptionTUI class using rich library"
+            details: "Uses rich.live.Live, rich.panel.Panel, rich.text.Text for terminal UI"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI"
+          - point: "Live display panel showing current transcription"
+            details: "Panel with title, scrolling text area for transcript"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI._render"
+          - point: "Status bar showing recording state, duration, segment count"
+            details: "Bottom line with 'Recording/Stopped | Duration: MM:SS | Segments: N'"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI._render"
+          - point: "Keyboard controls: SPACE start/stop, Q quit, S save"
+            details: "_handle_key() method dispatches based on key character"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI._handle_key"
+          - point: "run() method starts TUI event loop"
+            details: "Sets up Live context, spawns keyboard thread, main loop updates display"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI.run"
+          - point: "Integrates AudioCapture, StreamingTranscriber, TranscriptionStorage"
+            details: "Creates instances in constructor, uses in run() loop"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI.__init__"
+          - point: "Shows partial (gray) vs final (white) text"
+            details: "Text.append() with style='dim' for partial, no style for final"
+            reference: "src/theo/transcription/tui.py:TranscriptionTUI._render"
+          - point: "__main__.py entry point"
+            details: "argparse for --model, --namespace, --language; creates and runs TUI"
+            reference: "src/theo/transcription/__main__.py:main"
+          - point: "CLI args: --model, --namespace, --language"
+            details: "argparse.ArgumentParser with defaults matching constructor"
+            reference: "src/theo/transcription/__main__.py:main"
+
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run black src/theo/transcription/ && uv run isort src/theo/transcription/ && uv run ruff check src/theo/transcription/ --fix && uv run mypy src/theo/transcription/"
+            exit_on_failure: true
+
+      commit:
+        type: "feat"
+        message: "Add TUI for real-time voice transcription"
+        files: ["src/theo/transcription/tui.py", "src/theo/transcription/__main__.py"]
+
+    - task_number: "6"
+      name: "Add tests for transcription module"
+      agent: "python-pro"
+      files:
+        - "tests/transcription/__init__.py"
+        - "tests/transcription/test_types.py"
+        - "tests/transcription/test_audio.py"
+        - "tests/transcription/test_transcriber.py"
+        - "tests/transcription/test_storage.py"
+      depends_on: [1, 2, 3, 4]
+
+      success_criteria:
+        - "test_types.py: Tests for TranscriptionSegment, TranscriptionSession, AudioChunk"
+        - "test_types.py: Test to_memory_document() conversion"
+        - "test_types.py: Test get_full_text() concatenation"
+        - "test_audio.py: Test AudioCapture initialization"
+        - "test_audio.py: Test start/stop state transitions"
+        - "test_audio.py: Mock sounddevice for unit tests"
+        - "test_transcriber.py: Test StreamingTranscriber initialization"
+        - "test_transcriber.py: Mock mlx_audio.stt.load for unit tests"
+        - "test_transcriber.py: Test transcribe_stream with mock audio"
+        - "test_storage.py: Test save_session with mock HybridStore"
+        - "All tests pass with: uv run pytest tests/transcription/ -v"
+        - "No TODO comments in test code"
+
+      test_commands:
+        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/transcription/ -v --tb=short"
+
+      runtime_metadata:
+        dependency_checks:
+          - command: "uv run python -c 'import pytest'"
+            description: "Verify pytest available"
+        documentation_targets: []
+
+      description: |
+        <task_description>
+        Create comprehensive tests for the transcription module.
+
+        Location: tests/transcription/
+
+        test_types.py:
+        - test_transcription_segment_creation(): Create segment, verify fields
+        - test_transcription_segment_frozen(): Verify immutability
+        - test_audio_chunk_creation(): Create chunk with np.array
+        - test_transcription_session_add_segment(): Add segments, verify list
+        - test_transcription_session_get_full_text(): Only final segments concatenated
+        - test_transcription_session_to_memory_document(): Verify conversion to MemoryDocument
+        - test_transcription_session_duration(): Calculate duration from segments
+
+        test_audio.py:
+        - test_audio_capture_init(): Verify default parameters
+        - test_audio_capture_start_stop(): Mock sounddevice, verify state transitions
+        - test_audio_capture_context_manager(): Verify __enter__/__exit__
+        - test_audio_capture_is_recording(): Property returns correct state
+
+        test_transcriber.py:
+        - test_streaming_transcriber_init(): Verify model not loaded yet
+        - test_streaming_transcriber_lazy_load(): Model loaded on first use
+        - test_transcribe_stream_yields_segments(): Mock model, verify segment generation
+        - test_transcriber_close(): Verify model released
+
+        test_storage.py:
+        - test_transcription_storage_init(): Verify HybridStore stored
+        - test_save_session(): Mock HybridStore.add_memory, verify called correctly
+        - test_save_session_returns_id(): Verify memory ID returned
+
+        Mock patterns:
+        - Use pytest-mock or unittest.mock
+        - Mock sounddevice.InputStream for audio tests
+        - Mock mlx_audio.stt.load for transcriber tests
+        - Mock HybridStore for storage tests
+        </task_description>
+
+      implementation:
+        approach: |
+          Unit tests with mocks for external dependencies.
+          Test each component in isolation.
+          Verify data flow between components.
+        key_points:
+          - point: "test_types.py tests TranscriptionSegment, TranscriptionSession, AudioChunk"
+            details: "Tests creation, field access, immutability for frozen dataclasses"
+            reference: "tests/transcription/test_types.py"
+          - point: "test_types.py tests to_memory_document() conversion"
+            details: "Verifies MemoryDocument created with correct type, namespace, content"
+            reference: "tests/transcription/test_types.py:test_transcription_session_to_memory_document"
+          - point: "test_types.py tests get_full_text() concatenation"
+            details: "Verifies only final segments included, proper spacing"
+            reference: "tests/transcription/test_types.py:test_transcription_session_get_full_text"
+          - point: "test_audio.py tests AudioCapture initialization"
+            details: "Verifies default sample_rate=16000, channels=1, chunk_duration=1.0"
+            reference: "tests/transcription/test_audio.py:test_audio_capture_init"
+          - point: "test_audio.py tests start/stop state transitions"
+            details: "Mocks sounddevice.InputStream, verifies _recording flag changes"
+            reference: "tests/transcription/test_audio.py:test_audio_capture_start_stop"
+          - point: "test_audio.py mocks sounddevice"
+            details: "Uses pytest-mock to patch sounddevice.InputStream"
+            reference: "tests/transcription/test_audio.py"
+          - point: "test_transcriber.py tests StreamingTranscriber initialization"
+            details: "Verifies _model is None before first use (lazy loading)"
+            reference: "tests/transcription/test_transcriber.py:test_streaming_transcriber_init"
+          - point: "test_transcriber.py mocks mlx_audio.stt.load"
+            details: "Patches load() to return mock model with generate_streaming method"
+            reference: "tests/transcription/test_transcriber.py"
+          - point: "test_transcriber.py tests transcribe_stream"
+            details: "Verifies TranscriptionSegment yielded for each StreamingResult"
+            reference: "tests/transcription/test_transcriber.py:test_transcribe_stream_yields_segments"
+          - point: "test_storage.py tests save_session with mock HybridStore"
+            details: "Mocks add_memory, verifies MemoryDocument passed correctly"
+            reference: "tests/transcription/test_storage.py:test_save_session"
+          - point: "All tests pass"
+            details: "uv run pytest tests/transcription/ -v returns exit code 0"
+            reference: "tests/transcription/"
+
+      code_quality:
+        python:
+          full_quality_pipeline:
+            command: "cd /Users/harrison/Documents/Github/theo && uv run black tests/transcription/ && uv run isort tests/transcription/ && uv run ruff check tests/transcription/ --fix"
+            exit_on_failure: true
+
+      commit:
+        type: "test"
+        message: "Add tests for transcription module"
+        files: ["tests/transcription/**"]
