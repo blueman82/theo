@@ -121,7 +121,8 @@ class TestStreamingTranscriber:
     def test_transcriber_context_manager(self, mock_whisper_model: MagicMock) -> None:
         """Verify context manager calls close() on exit."""
         with StreamingTranscriber() as transcriber:
-            pass  # __enter__ loads model via _ensure_model
+            # __enter__ loads model via _ensure_model
+            assert transcriber._model is mock_whisper_model
 
         # Model should be None after context exit
         assert transcriber._model is None
