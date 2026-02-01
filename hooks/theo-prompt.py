@@ -270,6 +270,21 @@ def main():
                 memories.extend(global_expanded)
                 log(f"found {len(global_mems)} + {len(global_expanded)} expanded global memories")
 
+        # ALWAYS fetch golden rules regardless of semantic match
+        golden_result = call_theo("memory_list", {
+            "memory_type": "golden_rule",
+            "namespace": "global",
+            "limit": 10,
+        })
+        if golden_result.get("success"):
+            golden_data = golden_result.get("data", {})
+            golden_rules = golden_data.get("memories", [])
+            # Dedupe by ID
+            existing_ids = {m.get("id") for m in memories}
+            new_golden = [g for g in golden_rules if g.get("id") not in existing_ids]
+            memories.extend(new_golden)
+            log(f"added {len(new_golden)} golden rules (always included)")
+
         # Format and output context
         context = format_context(memories)
         if context:
