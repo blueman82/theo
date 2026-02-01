@@ -339,9 +339,11 @@ def call_tool_directly(args: argparse.Namespace) -> None:
         "memory_list": memory_tools.memory_list,
         "memory_forget": memory_tools.memory_forget,
         "memory_detect_contradictions": memory_tools.memory_detect_contradictions,
-        "memory_check_supersedes": memory_tools.memory_check_supersedes,
-        "memory_validate": memory_tools.memory_validate,
         "memory_relate": memory_tools.memory_relate,
+        "memory_apply": memory_tools.memory_apply,
+        "memory_outcome": memory_tools.memory_outcome,
+        "memory_count": memory_tools.memory_count,
+        "memory_analyze_health": memory_tools.memory_analyze_health,
         "doc_search": query_tools.search,
     }
 
