@@ -60,11 +60,12 @@ class TestStreamingTranscriber:
     def test_streaming_transcriber_lazy_load(self) -> None:
         """Model loaded on _ensure_model(), not at init."""
         mock_model = MagicMock(name="mock_model")
+        mock_model._processor = MagicMock()  # Simulate processor exists
         mock_load = MagicMock(return_value=mock_model)
 
-        # Create a mock mlx_audio.stt module with load function
-        mock_mlx_audio_stt = MagicMock()
-        mock_mlx_audio_stt.load = mock_load
+        # Create mock mlx_audio.stt.generate module with load_model function
+        mock_mlx_audio_stt_generate = MagicMock()
+        mock_mlx_audio_stt_generate.load_model = mock_load
 
         with patch.dict(
             "sys.modules",
@@ -72,7 +73,8 @@ class TestStreamingTranscriber:
                 "mlx": MagicMock(),
                 "mlx.core": MagicMock(),
                 "mlx_audio": MagicMock(),
-                "mlx_audio.stt": mock_mlx_audio_stt,
+                "mlx_audio.stt": MagicMock(),
+                "mlx_audio.stt.generate": mock_mlx_audio_stt_generate,
             },
         ):
             from theo.transcription.transcriber import StreamingTranscriber
@@ -82,7 +84,7 @@ class TestStreamingTranscriber:
             # Model not loaded yet
             assert transcriber._model is None
 
-            # Call _ensure_model - it imports load from mlx_audio.stt internally
+            # Call _ensure_model - it imports load_model from mlx_audio.stt.generate
             model = transcriber._ensure_model()
 
             # Model now loaded
