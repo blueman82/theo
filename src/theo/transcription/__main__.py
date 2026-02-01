@@ -355,6 +355,17 @@ def main() -> None:
                 delete_transcription(storage, args.delete)
             return
 
+        # Oneshot mode when stdout is piped (not a TTY)
+        if not sys.stdout.isatty():
+            run_oneshot(
+                model_path=args.model,
+                device=args.device,
+                language=args.language,
+                prompt=args.prompt,
+                temperature=args.temperature,
+            )
+            return
+
         # Run TUI mode
         tui = TranscriptionTUI(
             model_path=args.model,
