@@ -1,18 +1,28 @@
-"""Entry point for Theo voice transcription TUI.
+"""Entry point for Theo voice transcription.
 
 Run with: python -m theo.transcription
+
+Modes:
+- TUI mode (default): Interactive terminal UI with keyboard controls
+- Oneshot mode: When stdout is piped, records until silence, prints transcription
+  Example: python -m theo.transcription --batch | pbcopy
 """
 
 import argparse
 import asyncio
+import sys
+import time
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
 import sounddevice as sd
 
 from theo.storage.hybrid import HybridStore
 from theo.transcription import audio_storage, tts
+from theo.transcription.audio import AudioCapture
 from theo.transcription.storage import TranscriptionStorage
+from theo.transcription.transcriber import StreamingTranscriber
 from theo.transcription.tui import TranscriptionTUI
 
 
