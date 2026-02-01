@@ -470,8 +470,8 @@ class TestMemoryTools:
         assert result["data"]["total"] == 1
         assert "dark mode" in result["data"]["memories"][0]["content"]
 
-    def test_memory_validate_success(self, mock_daemon_client, mock_store, mock_validation_loop):
-        """Test successful memory validation."""
+    def test_memory_outcome_direct_validation(self, mock_daemon_client, mock_store, mock_validation_loop):
+        """Test memory_outcome with skip_event=True for direct validation."""
         from theo.tools.memory_tools import MemoryTools
 
         tools = MemoryTools(
@@ -482,16 +482,16 @@ class TestMemoryTools:
 
         import asyncio
 
+        # Test memory_outcome with skip_event=True (replaces memory_validate)
         result = asyncio.run(
-            tools.memory_validate(
+            tools.memory_outcome(
                 memory_id="mem_session_abc12345",
-                was_helpful=True,
-                context="Used in test scenario",
+                success=True,
+                skip_event=True,  # Skip event recording, direct validation
             )
         )
 
         assert result["success"] is True
-        assert result["data"]["old_confidence"] == 0.5
         assert result["data"]["new_confidence"] == 0.6
 
     def test_memory_store_with_relates_to(
@@ -812,7 +812,7 @@ class TestMCPToolIntegration:
         """Test full memory workflow through MCP tools."""
         import asyncio
 
-        from theo.mcp_server import memory_recall, memory_store, memory_validate
+        from theo.mcp_server import memory_outcome, memory_recall, memory_store
 
         # Store a memory
         store_result = asyncio.run(
@@ -828,11 +828,12 @@ class TestMCPToolIntegration:
         recall_result = asyncio.run(memory_recall(query="test memory", n_results=5))
         assert recall_result["success"] is True
 
-        # Validate a memory
+        # Validate a memory using memory_outcome with skip_event=True
         validate_result = asyncio.run(
-            memory_validate(
+            memory_outcome(
                 memory_id="mem_session_test123",
-                was_helpful=True,
+                success=True,
+                skip_event=True,  # Direct validation without event recording
             )
         )
         assert validate_result["success"] is True

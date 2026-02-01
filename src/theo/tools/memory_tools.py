@@ -3,18 +3,17 @@
 This module provides MCP tools for memory operations (from Recall):
 - memory_store: Store a new memory with semantic indexing
 - memory_recall: Recall memories using semantic search
-- memory_validate: Validate a memory and adjust confidence
 - memory_forget: Delete memories by ID or query
+- memory_context: Get formatted memory context for LLM injection
 - memory_apply: Record that a memory is being applied (TRY phase)
-- memory_outcome: Record the outcome of memory application (LEARN phase)
+- memory_outcome: Record the outcome and adjust confidence (LEARN phase)
+  - Use skip_event=True for direct validation without event recording
 - memory_relate: Create a relationship between two memories
 - memory_inspect_graph: Inspect the graph structure around a memory
 - memory_edge_forget: Delete edges between memories
 - memory_count: Count memories with optional filters
 - memory_list: List memories with pagination
-- memory_detect_contradictions: Detect contradicting memories
-- memory_check_supersedes: Check if a memory supersedes another
-- memory_analyze_health: Analyze memory system health
+- memory_analyze_health: Analyze memory system health (includes contradiction detection)
 
 Uses DaemonClient for non-blocking embedding operations and integrates
 with ValidationLoop for confidence scoring.
@@ -793,13 +792,13 @@ class MemoryTools:
                 "error": str(e),
             }
 
-    async def memory_validate(
+    async def _validate_memory(
         self,
         memory_id: str,
         was_helpful: bool,
         context: Optional[str] = None,
     ) -> dict[str, Any]:
-        """Validate a memory and adjust its confidence score.
+        """Internal: Validate a memory and adjust its confidence score.
 
         Records whether a memory was helpful and adjusts confidence:
         - Helpful: confidence += 0.1 (max 1.0)
@@ -843,7 +842,7 @@ class MemoryTools:
             }
 
         except Exception as e:
-            logger.error(f"memory_validate failed for {memory_id}: {e}", exc_info=True)
+            logger.error(f"_validate_memory failed for {memory_id}: {e}", exc_info=True)
             return {
                 "success": False,
                 "error": str(e),
@@ -1161,6 +1160,7 @@ class MemoryTools:
         success: bool,
         error_msg: Optional[str] = None,
         session_id: Optional[str] = None,
+        skip_event: bool = False,
     ) -> dict[str, Any]:
         """Record the outcome of a memory application and adjust confidence.
 
@@ -1172,6 +1172,8 @@ class MemoryTools:
             success: Whether the application was successful
             error_msg: Optional error message if failed
             session_id: Optional session identifier
+            skip_event: If True, skip event recording and only adjust confidence.
+                Use this for direct validation without the TRY-LEARN cycle.
 
         Returns:
             Dictionary with:
@@ -1180,33 +1182,36 @@ class MemoryTools:
             - error: Error message if operation failed
         """
         try:
-            if not self._hybrid:
-                return {
-                    "success": False,
-                    "error": "HybridStore not configured - graph operations unavailable",
-                }
-
-            # Verify memory exists
-            memory = await self._hybrid.get_memory(memory_id)
-            if memory is None:
-                return {
-                    "success": False,
-                    "error": f"Memory '{memory_id}' not found",
-                }
-
-            # Record the outcome event
-            event_type = "succeeded" if success else "failed"
             context = error_msg if error_msg else ("Success" if success else "Failed")
 
-            self._hybrid.add_validation_event(
-                memory_id=memory_id,
-                event_type=event_type,
-                context=context,
-                session_id=session_id,
-            )
+            # When skip_event=False (default), record the validation event
+            if not skip_event:
+                if not self._hybrid:
+                    return {
+                        "success": False,
+                        "error": "HybridStore not configured - graph operations unavailable",
+                    }
 
-            # Adjust confidence via memory_validate
-            validate_result = await self.memory_validate(
+                # Verify memory exists
+                memory = await self._hybrid.get_memory(memory_id)
+                if memory is None:
+                    return {
+                        "success": False,
+                        "error": f"Memory '{memory_id}' not found",
+                    }
+
+                # Record the outcome event
+                event_type = "succeeded" if success else "failed"
+
+                self._hybrid.add_validation_event(
+                    memory_id=memory_id,
+                    event_type=event_type,
+                    context=context,
+                    session_id=session_id,
+                )
+
+            # Adjust confidence via memory_validate (internal method)
+            validate_result = await self._validate_memory(
                 memory_id=memory_id,
                 was_helpful=success,
                 context=context,
@@ -1760,8 +1765,79 @@ class MemoryTools:
             }
 
     # =========================================================================
-    # Validation Analysis (detect_contradictions, check_supersedes, analyze_health)
+    # Validation Analysis (internal helpers and analyze_health)
     # =========================================================================
+
+    async def _detect_contradictions_for_memory(
+        self,
+        memory_id: str,
+        similarity_threshold: float = 0.7,
+        create_edges: bool = False,
+    ) -> list[dict[str, Any]]:
+        """Internal: Detect memories that contradict a given memory.
+
+        Uses semantic search to find similar memories, then checks for
+        contradictions based on content analysis.
+
+        Args:
+            memory_id: ID of the memory to check for contradictions
+            similarity_threshold: Minimum similarity for considering (default: 0.7)
+            create_edges: Whether to create CONTRADICTS edges (default: False)
+
+        Returns:
+            List of contradiction dicts with source_id, target_id, similarity
+        """
+        contradictions: list[dict[str, Any]] = []
+
+        if not self._hybrid:
+            return contradictions
+
+        # Get the memory
+        memory = await self._hybrid.get_memory(memory_id)
+        if memory is None:
+            return contradictions
+
+        # Search for similar memories
+        result = await self.memory_recall(
+            query=memory.get("content", ""),
+            n_results=20,
+            include_related=False,
+        )
+
+        if not result.get("success"):
+            return contradictions
+
+        similar_memories = result.get("data", {}).get("memories", [])
+
+        for similar in similar_memories:
+            if similar["id"] == memory_id:
+                continue
+            similarity = similar.get("similarity", 0)
+            if similarity < similarity_threshold:
+                continue
+
+            # Simple contradiction detection: same type, high similarity
+            # In production, this would use LLM reasoning
+            if similar.get("type") == memory.get("type"):
+                contradictions.append(
+                    {
+                        "source_id": memory_id,
+                        "target_id": similar["id"],
+                        "similarity": similarity,
+                        "source_preview": memory.get("content", "")[:100],
+                        "target_preview": similar.get("content", "")[:100],
+                    }
+                )
+
+                if create_edges:
+                    self._hybrid.add_edge(
+                        source_id=memory_id,
+                        target_id=similar["id"],
+                        edge_type="contradicts",
+                        weight=similarity,
+                    )
+
+        return contradictions
 
     async def memory_detect_contradictions(
         self,
@@ -1851,109 +1927,6 @@ class MemoryTools:
                 "error": str(e),
             }
 
-    async def memory_check_supersedes(
-        self,
-        memory_id: str,
-        create_edge: bool = True,
-    ) -> dict[str, Any]:
-        """Check if a memory should supersede another.
-
-        A newer memory supersedes an older one when it consistently succeeds
-        where the older one failed on similar topics.
-
-        Args:
-            memory_id: ID of the (potentially newer) memory to check
-            create_edge: Whether to create SUPERSEDES edge (default: True)
-
-        Returns:
-            Dictionary with:
-            - success: Boolean indicating operation success
-            - data: Dictionary with superseded_id and edge_created
-            - error: Error message if operation failed
-        """
-        try:
-            if not self._hybrid:
-                return {
-                    "success": False,
-                    "error": "HybridStore not configured",
-                }
-
-            # Get the memory
-            memory = await self._hybrid.get_memory(memory_id)
-            if memory is None:
-                return {
-                    "success": False,
-                    "error": f"Memory '{memory_id}' not found",
-                }
-
-            # Search for similar memories
-            result = await self.memory_recall(
-                query=memory.get("content", ""),
-                n_results=10,
-            )
-
-            if not result.get("success"):
-                return result
-
-            similar_memories = result.get("data", {}).get("memories", [])
-
-            superseded_id: Optional[str] = None
-            edge_created = False
-            reason: Optional[str] = None
-
-            # Check for supersession: newer memory with higher confidence
-            # that is similar to an older memory with lower confidence
-            for similar in similar_memories:
-                if similar["id"] == memory_id:
-                    continue
-
-                # Check if this memory should supersede the similar one
-                my_confidence = memory.get("confidence", 0.3)
-                their_confidence = similar.get("confidence", 0.3)
-
-                if my_confidence > their_confidence and similar.get("similarity", 0) > 0.8:
-                    target_mem_id: str = similar["id"]
-                    superseded_id = target_mem_id
-                    reason = (
-                        f"Memory {memory_id} (confidence={my_confidence:.2f}) "
-                        f"supersedes {target_mem_id} (confidence={their_confidence:.2f}) "
-                        f"due to higher confidence on similar content"
-                    )
-
-                    if create_edge:
-                        self._hybrid.add_edge(
-                            source_id=memory_id,
-                            target_id=target_mem_id,
-                            edge_type="supersedes",
-                            weight=1.0,
-                        )
-                        edge_created = True
-
-                        # Reduce superseded memory's importance
-                        await self._hybrid.update_memory(
-                            target_mem_id,
-                            importance=similar.get("importance", 0.5) * 0.5,
-                        )
-
-                    break  # Only supersede one memory
-
-            return {
-                "success": True,
-                "data": {
-                    "memory_id": memory_id,
-                    "superseded_id": superseded_id,
-                    "edge_created": edge_created,
-                    "reason": reason,
-                },
-            }
-
-        except Exception as e:
-            logger.error(f"memory_check_supersedes failed: {e}", exc_info=True)
-            return {
-                "success": False,
-                "error": str(e),
-            }
-
     async def memory_analyze_health(
         self,
         namespace: Optional[str] = None,
@@ -2027,7 +2000,25 @@ class MemoryTools:
                                 }
                             )
 
+            # Check for contradictions using internal method
+            if include_contradictions and self._hybrid:
+                # Limit to first 50 memories to avoid O(n²) explosion
+                for mem in memories[:50]:
+                    contradictions_result = await self._detect_contradictions_for_memory(
+                        memory_id=mem["id"],
+                        similarity_threshold=0.7,
+                        create_edges=False,  # Don't auto-create during health check
+                    )
+                    if contradictions_result:
+                        issues["contradictions"].extend(contradictions_result)
+
             # Generate recommendations
+            if issues["contradictions"]:
+                issues["recommendations"].append(
+                    f"Found {len(issues['contradictions'])} potential contradictions. "
+                    "Review and resolve conflicting memories."
+                )
+
             if issues["low_confidence"]:
                 issues["recommendations"].append(
                     f"Found {len(issues['low_confidence'])} low-confidence memories. "

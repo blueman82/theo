@@ -1,115 +1,38 @@
 ---
 name: contradictions
-description: Detect contradicting memories in Theo. Use when user wants to find conflicts, inconsistencies, or clean up memory. Triggers on "find contradictions", "check conflicts", "memory conflicts", or explicit /contradictions command.
+description: "DEPRECATED: Use /health --include-contradictions instead. Contradiction detection is now part of memory_analyze_health."
 ---
 
-# Detect Contradictions
+# Detect Contradictions (DEPRECATED)
 
-Find memories that contradict each other.
+This skill has been consolidated into `/health`.
 
-## Arguments
+## Migration
 
-```
-/contradictions <memory_id>        # Check specific memory
-/contradictions --scan             # Scan recent memories for conflicts
-/contradictions --threshold=0.8    # Adjust similarity threshold
-```
-
-- `memory_id`: Specific memory to check (optional)
-- `--scan`: Check multiple recent memories
-- `--threshold`: Similarity threshold (default: 0.7)
-
-## Instructions
-
-### Mode 1: Check Specific Memory
-
-If memory_id provided:
-
-1. Call:
-   ```javascript
-   await theo.memory_detect_contradictions({
-     memory_id: "<id>",
-     similarity_threshold: 0.7,  // or from --threshold
-     create_edges: true
-   });
-   ```
-
-2. Format results:
-   ```
-   ## Contradictions for <memory_id>
-
-   ### Memory Content
-   > <original memory content>
-
-   ### Conflicts Found: <count>
-
-   1. **<conflicting_id>** (similarity: 0.85)
-      > <conflicting content>
-      Reason: <why they contradict>
-
-   2. ...
-
-   ---
-   [If edges created]: Created CONTRADICTS edges in graph
-   ```
-
-3. If no contradictions:
-   ```
-   No contradictions found for <memory_id>
-   ```
-
-### Mode 2: Scan Recent Memories
-
-If `--scan` flag:
-
-1. First list recent memories:
-   ```javascript
-   const memories = await theo.memory_list({
-     limit: 20,
-     offset: 0
-   });
-   ```
-
-2. For each memory, check contradictions:
-   ```javascript
-   for (const mem of memories) {
-     await theo.memory_detect_contradictions({
-       memory_id: mem.id,
-       create_edges: true
-     });
-   }
-   ```
-
-3. Aggregate and report:
-   ```
-   ## Contradiction Scan Results
-
-   Scanned: 20 memories
-   Conflicts found: <count>
-
-   ### Conflict Pairs
-   1. <mem_a> vs <mem_b>
-      - A: "<content a>"
-      - B: "<content b>"
-
-   2. ...
-
-   ---
-   Tip: Use `/forget <id>` to remove outdated memories
-   ```
-
-## Resolution Tips
-
-When contradictions found, suggest:
-- Keep the more recent memory
-- Keep the one with higher confidence
-- Use `/validate` to test which is correct
-- Use `/forget` to remove the outdated one
-
-## Examples
+Use `/health` with the `--include-contradictions` flag:
 
 ```
-/contradictions mem_abc123
-/contradictions --scan
-/contradictions mem_xyz --threshold=0.8
+/health --include-contradictions
 ```
+
+Or use the API directly:
+
+```javascript
+await theo.memory_analyze_health({
+  include_contradictions: true,
+  include_low_confidence: true,
+  include_stale: true
+});
+```
+
+## Why Changed?
+
+The `memory_detect_contradictions` tool was removed in Theo v2.0 API consolidation:
+- Contradiction detection is now part of `memory_analyze_health`
+- Reduces API surface (13 → 10 memory tools)
+- Health check provides comprehensive analysis in one call
+
+## See Also
+
+- `/health` - Comprehensive memory health analysis
+- `/validate` - TRY-LEARN validation cycle

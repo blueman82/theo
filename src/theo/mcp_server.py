@@ -6,7 +6,10 @@ a unified AI memory and document retrieval system combining DocVec and Recall.
 The server exposes tools for:
 - Document indexing (index_file, index_directory)
 - Semantic search (search, search_with_filters, search_with_budget)
-- Memory operations (memory_store, memory_recall, memory_validate, memory_forget)
+- Memory operations (memory_store, memory_recall, memory_forget, memory_context)
+- TRY/LEARN cycle (memory_apply, memory_outcome)
+- Graph operations (memory_relate, memory_edge_forget, memory_inspect_graph)
+- Inspection (memory_count, memory_list, validation_history, memory_analyze_health)
 - Collection management (delete_chunks, delete_file, clear_index, get_stats)
 
 Architectural justification:
@@ -301,41 +304,6 @@ async def memory_recall(
 
 
 @mcp.tool()
-async def memory_validate(
-    memory_id: str,
-    was_helpful: bool,
-    context: Optional[str] = None,
-) -> dict[str, Any]:
-    """Validate a memory and adjust its confidence score.
-
-    Records whether a memory was helpful and adjusts confidence:
-    - Helpful: confidence += 0.1 (max 1.0)
-    - Not helpful: confidence -= 0.15 (min 0.0)
-
-    Memories reaching confidence >= 0.9 become golden rules.
-
-    Args:
-        memory_id: ID of the memory to validate
-        was_helpful: Whether the memory was helpful
-        context: Optional context describing the usage
-
-    Returns:
-        Dictionary with:
-        - success: Boolean indicating operation success
-        - data: Dictionary with old_confidence, new_confidence, promoted
-        - error: Error message if operation failed
-    """
-    if memory_tools is None:
-        return {"success": False, "error": "Server not initialized"}
-
-    return await memory_tools.memory_validate(
-        memory_id=memory_id,
-        was_helpful=was_helpful,
-        context=context,
-    )
-
-
-@mcp.tool()
 async def memory_forget(
     memory_id: Optional[str] = None,
     query: Optional[str] = None,
@@ -451,6 +419,7 @@ async def memory_outcome(
     success: bool,
     error_msg: Optional[str] = None,
     session_id: Optional[str] = None,
+    skip_event: bool = False,
 ) -> dict[str, Any]:
     """Record the outcome of a memory application and adjust confidence.
 
@@ -462,6 +431,8 @@ async def memory_outcome(
         success: Whether the application was successful
         error_msg: Optional error message if failed
         session_id: Optional session identifier
+        skip_event: If True, skip event recording and only adjust confidence.
+            Use this for direct validation without the TRY-LEARN cycle.
 
     Returns:
         Dictionary with:
@@ -477,6 +448,7 @@ async def memory_outcome(
         success=success,
         error_msg=error_msg,
         session_id=session_id,
+        skip_event=skip_event,
     )
 
 
@@ -712,67 +684,6 @@ async def validation_history(
 # ==============================================================================
 # Validation Analysis Tools
 # ==============================================================================
-
-
-@mcp.tool()
-async def memory_detect_contradictions(
-    memory_id: str,
-    similarity_threshold: float = 0.7,
-    create_edges: bool = True,
-) -> dict[str, Any]:
-    """Detect memories that contradict a given memory.
-
-    Uses semantic search to find similar memories, then checks for
-    contradictions based on content analysis.
-
-    Args:
-        memory_id: ID of the memory to check for contradictions
-        similarity_threshold: Minimum similarity for considering (default: 0.7)
-        create_edges: Whether to create CONTRADICTS edges (default: True)
-
-    Returns:
-        Dictionary with:
-        - success: Boolean indicating operation success
-        - data: Dictionary with contradictions list and edges_created count
-        - error: Error message if operation failed
-    """
-    if memory_tools is None:
-        return {"success": False, "error": "Server not initialized"}
-
-    return await memory_tools.memory_detect_contradictions(
-        memory_id=memory_id,
-        similarity_threshold=similarity_threshold,
-        create_edges=create_edges,
-    )
-
-
-@mcp.tool()
-async def memory_check_supersedes(
-    memory_id: str,
-    create_edge: bool = True,
-) -> dict[str, Any]:
-    """Check if a memory should supersede another.
-
-    A newer memory supersedes an older one when it consistently succeeds
-    where the older one failed on similar topics.
-
-    Args:
-        memory_id: ID of the (potentially newer) memory to check
-        create_edge: Whether to create SUPERSEDES edge (default: True)
-
-    Returns:
-        Dictionary with:
-        - success: Boolean indicating operation success
-        - data: Dictionary with superseded_id and edge_created
-        - error: Error message if operation failed
-    """
-    if memory_tools is None:
-        return {"success": False, "error": "Server not initialized"}
-
-    return await memory_tools.memory_check_supersedes(
-        memory_id=memory_id,
-        create_edge=create_edge,
-    )
 
 
 @mcp.tool()

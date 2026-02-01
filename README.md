@@ -241,7 +241,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 
 ## API Reference
 
-Theo exposes 27 MCP tools:
+Theo exposes 22 MCP tools:
 
 ### Document Tools (2)
 - `index_file(file_path, namespace)` - Index a single document
@@ -252,23 +252,20 @@ Theo exposes 27 MCP tools:
 - `search_with_filters(query, filters, n_results)` - Filtered search
 - `search_with_budget(query, max_tokens)` - Token-budget search
 
-### Memory Tools (16)
-- `memory_store(content, memory_type, namespace, importance)` - Store memory
+### Memory Tools (13)
+- `memory_store(content, memory_type, namespace, importance, supersedes_query)` - Store memory (use `supersedes_query` to auto-replace old memories)
 - `memory_recall(query, n_results, namespace, memory_type)` - Recall memories
-- `memory_validate(memory_id, was_helpful, context)` - Validate memory
 - `memory_forget(memory_id, query, force)` - Delete memories
 - `memory_context(query, namespace, token_budget)` - Generate LLM context
 - `memory_apply(memory_id, context)` - Record memory usage (TRY phase)
-- `memory_outcome(memory_id, success, error_msg)` - Record result (LEARN phase)
+- `memory_outcome(memory_id, success, skip_event)` - Record result + adjust confidence (use `skip_event=True` for direct validation)
 - `memory_relate(source_id, target_id, relation_type)` - Create relationships
 - `memory_edge_forget(source_id, target_id)` - Delete relationship edges
 - `memory_inspect_graph(memory_id, max_depth, output_format)` - Visualize graph
 - `memory_count(namespace, memory_type)` - Count memories with filters
 - `memory_list(namespace, memory_type, limit)` - List memories with pagination
 - `validation_history(memory_id, event_type, limit)` - Get validation timeline
-- `memory_detect_contradictions(memory_id, threshold)` - Find conflicts
-- `memory_check_supersedes(memory_id)` - Check if memory supersedes another
-- `memory_analyze_health(namespace)` - Analyze memory system health
+- `memory_analyze_health(namespace, include_contradictions)` - Analyze memory system health (includes contradiction detection)
 
 ### Management Tools (4)
 - `delete_chunks(ids)` - Delete specific chunks
@@ -282,7 +279,7 @@ See [docs/API.md](docs/API.md) for complete API specifications.
 
 ## Claude Code Skills
 
-Theo provides 15 Claude Code skills for convenient CLI access:
+Theo provides 14 Claude Code skills for convenient CLI access:
 
 | Skill | Description | Example |
 |-------|-------------|---------|
@@ -296,9 +293,8 @@ Theo provides 15 Claude Code skills for convenient CLI access:
 | `/clean` | Clean up indexed documents | `/clean file ./old-doc.md` |
 | `/stats` | Show index and memory statistics | `/stats` |
 | `/validate` | TRY-LEARN validation cycle | `/validate apply mem_abc123 "testing"` |
-| `/contradictions` | Detect conflicting memories | `/contradictions mem_abc123` |
 | `/context` | Get formatted context for LLM injection | `/context authentication --budget 2000` |
-| `/health` | Analyze memory system health | `/health` |
+| `/health` | Analyze memory system health (includes contradictions) | `/health --include-contradictions` |
 | `/history` | View validation event timeline | `/history mem_abc123` |
 | `/graph` | Visualize memory relationships | `/graph mem_abc123 --format mermaid` |
 
