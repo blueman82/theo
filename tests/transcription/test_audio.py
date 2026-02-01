@@ -164,8 +164,8 @@ class TestAudioCaptureCallback:
         capture = AudioCapture()
         capture.start()
 
-        # Simulate callback with audio data
-        indata = np.zeros((16000, 1), dtype=np.float32)
+        # Simulate callback with non-silent audio data (must exceed RMS threshold of 0.01)
+        indata = np.full((16000, 1), 0.1, dtype=np.float32)  # Non-zero audio data
         mock_status = MagicMock()
         mock_status.__bool__ = MagicMock(return_value=False)
 
