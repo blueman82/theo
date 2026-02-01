@@ -25,7 +25,6 @@ from theo.storage import SQLiteStore
 from theo.tools import IndexingTools, ManagementTools, MemoryTools, QueryTools
 from theo.validation import FeedbackCollector, ValidationLoop
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -93,7 +92,13 @@ def mock_daemon_client() -> MagicMock:
         }
 
     client.embed = MagicMock(side_effect=mock_embed)
-    client.send = MagicMock(side_effect=lambda cmd, **kwargs: mock_search(kwargs.get("query", "")) if cmd == "search" else {"success": False, "error": f"Unknown command: {cmd}"})
+    client.send = MagicMock(
+        side_effect=lambda cmd, **kwargs: (
+            mock_search(kwargs.get("query", ""))
+            if cmd == "search"
+            else {"success": False, "error": f"Unknown command: {cmd}"}
+        )
+    )
 
     return client
 
@@ -636,7 +641,6 @@ class TestMemoryPipeline:
         # Store memory first time
         result1 = await memory_tools.memory_store(content=content, memory_type="fact")
         assert result1["success"] is True
-        id1 = result1["data"]["id"]
         hash1 = result1["data"]["content_hash"]
 
         # Store same content again - creates new memory (no dedup enforcement)
