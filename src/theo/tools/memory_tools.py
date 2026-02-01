@@ -55,12 +55,14 @@ RELATIONSHIP_CLASSIFICATION_PROMPT = (
     "You are analyzing the relationship between two memories in a knowledge graph.\n\n"
     "New Memory: {new_memory}\n"
     "Existing Memory: {existing_memory}\n\n"
-    "Determine the most appropriate relationship type from the new memory TO the existing memory:\n\n"
+    "Determine the most appropriate relationship type from the new memory "
+    "TO the existing memory:\n\n"
     '1. "relates_to" - General topical relationship (same subject area, related concepts)\n'
-    '2. "supersedes" - New memory replaces/updates the existing one (newer info about same thing)\n'
+    '2. "supersedes" - New memory replaces/updates the existing one '
+    "(newer info about same thing)\n"
     '3. "caused_by" - New memory is a consequence or result of the existing memory\n'
-    '4. "contradicts" - Memories make incompatible claims (use sparingly, only for direct conflicts)'
-    "\n\n"
+    '4. "contradicts" - Memories make incompatible claims '
+    "(use sparingly, only for direct conflicts)\n\n"
     'If no meaningful relationship exists, respond with "none".\n\n'
     "Respond with ONLY a JSON object:\n"
     '{{"relation": "relates_to|supersedes|caused_by|contradicts|none", '
