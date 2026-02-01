@@ -799,7 +799,8 @@ class TestMCPToolIntegration:
             "management": management_tools,
         }
 
-    def test_full_indexing_workflow(self, _configured_mcp_server, _tmp_path):
+    @pytest.mark.usefixtures("configured_mcp_server", "tmp_path")
+    def test_full_indexing_workflow(self):
         """Test full document indexing workflow through MCP tools."""
         # Note: This test verifies the MCP tool wrappers work correctly
         # The actual functionality is tested in the unit tests above
@@ -811,7 +812,8 @@ class TestMCPToolIntegration:
         result = asyncio.run(get_index_stats())
         assert result["success"] is True
 
-    def test_full_memory_workflow(self, _configured_mcp_server):
+    @pytest.mark.usefixtures("configured_mcp_server")
+    def test_full_memory_workflow(self):
         """Test full memory workflow through MCP tools."""
         import asyncio
 
