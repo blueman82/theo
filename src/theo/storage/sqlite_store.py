@@ -729,7 +729,9 @@ class SQLiteStore:
         except Exception as e:
             raise SQLiteStoreError(f"Failed to count edges: {e}") from e
 
-    def _orphan_where_clause(self, namespace: str | None) -> tuple[str, tuple[str, ...] | tuple[()]]:
+    def _orphan_where_clause(
+        self, namespace: str | None
+    ) -> tuple[str, tuple[str, ...] | tuple[()]]:
         """Build WHERE clause for orphan memory queries (DRY helper)."""
         base = """m.id NOT IN (SELECT source_id FROM edges)
             AND m.id NOT IN (SELECT target_id FROM edges)"""
