@@ -162,6 +162,75 @@ def delete_transcription(storage: TranscriptionStorage, session_id: str) -> None
         print("Delete failed.")
 
 
+def run_oneshot(
+    model_path: str,
+    device: int | None,
+    language: str | None,
+    prompt: str,
+    temperature: float,
+    silence_timeout: float = 2.0,
+    max_duration: float = 120.0,
+) -> None:
+    """Record until silence, transcribe, print to stdout.
+
+    Used when stdout is piped (not a TTY). Status messages go to stderr.
+    """
+    print("Loading model...", file=sys.stderr)
+
+    transcriber = StreamingTranscriber(
+        model_path=model_path,
+        language=language,
+        initial_prompt=prompt,
+        batch_mode=True,
+        temperature=temperature,
+    )
+
+    audio = AudioCapture(device=device)
+    audio_buffer: list[np.ndarray] = []
+
+    with transcriber:
+        print("Recording... (silence stops)", file=sys.stderr)
+        audio.start()
+
+        speech_started = False
+        last_audio_time = time.time()
+        start_time = time.time()
+
+        try:
+            while True:
+                elapsed = time.time() - start_time
+                if elapsed > max_duration:
+                    print(f"\nMax duration reached", file=sys.stderr)
+                    break
+
+                try:
+                    chunk = audio.get_chunk_nowait()
+                    if chunk is not None:
+                        audio_buffer.append(chunk.data)
+                        speech_started = True
+                        last_audio_time = time.time()
+                except Exception:
+                    pass
+
+                if speech_started:
+                    silence_duration = time.time() - last_audio_time
+                    if silence_duration >= silence_timeout:
+                        break
+
+                time.sleep(0.05)
+
+        finally:
+            audio.stop()
+
+        if not audio_buffer:
+            print("No audio captured", file=sys.stderr)
+            return
+
+        print("Transcribing...", file=sys.stderr)
+        segment = transcriber.transcribe_batch(audio_buffer)
+        print(segment.text)
+
+
 def main() -> None:
     """Run the transcription TUI or execute commands."""
     parser = argparse.ArgumentParser(description="Theo Voice Transcription")
