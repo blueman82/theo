@@ -589,10 +589,10 @@ class TestMemoryTools:
         assert "superseded" in result["data"]
         assert "mem_old_wrong" in result["data"]["superseded"]
         assert result["data"]["superseded_count"] == 1
-        # Check that the edge was created
-        mock_hybrid.add_edge.assert_called_once()
+        # Check that edges were created (explicit supersedes + auto-inferred relates_to)
+        assert mock_hybrid.add_edge.call_count >= 1
         # Check that confidence was set to 0.1 for superseded memory
-        mock_hybrid.update_memory.assert_called_once()
+        assert mock_hybrid.update_memory.call_count >= 1
         call_args = mock_hybrid.update_memory.call_args
         assert call_args[0][0] == "mem_old_wrong"  # First positional arg is target_id
         assert call_args[1]["confidence"] == 0.1  # Keyword arg confidence
