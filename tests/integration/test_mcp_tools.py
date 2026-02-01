@@ -920,9 +920,9 @@ class TestMCPToolWorkflows:
         from theo.mcp_server import (
             memory_context,
             memory_forget,
+            memory_outcome,
             memory_recall,
             memory_store,
-            memory_validate,
             set_tool_instances,
         )
 
