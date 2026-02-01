@@ -21,11 +21,16 @@ with ValidationLoop for confidence scoring.
 """
 
 import hashlib
+import json
 import logging
+import re
 import uuid
 from collections import deque
 from typing import Any, Optional
 
+import httpx
+
+from theo.config import TheoSettings
 from theo.daemon import DaemonClient
 from theo.storage.hybrid import HybridStore
 from theo.storage.sqlite_store import SQLiteStore
@@ -42,6 +47,71 @@ from theo.validation import ValidationLoop
 
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
+
+# Auto-relationship inference settings (from Recall)
+RELATIONSHIP_SIMILARITY_THRESHOLD = 0.6
+MAX_AUTO_RELATIONSHIPS = 5
+
+RELATIONSHIP_CLASSIFICATION_PROMPT = """You are analyzing the relationship between two memories in a knowledge graph.
+
+New Memory: {new_memory}
+Existing Memory: {existing_memory}
+
+Determine the most appropriate relationship type from the new memory TO the existing memory:
+
+1. "relates_to" - General topical relationship (same subject area, related concepts)
+2. "supersedes" - New memory replaces/updates the existing one (newer info about same thing)
+3. "caused_by" - New memory is a consequence or result of the existing memory
+4. "contradicts" - Memories make incompatible claims (use sparingly, only for direct conflicts)
+
+If no meaningful relationship exists, respond with "none".
+
+Respond with ONLY a JSON object:
+{{"relation": "relates_to|supersedes|caused_by|contradicts|none", "confidence": 0.0-1.0, "reason": "brief explanation"}}"""
+
+
+async def _call_ollama_for_relationship(
+    prompt: str,
+    host: str,
+    model: str,
+    timeout: int = 30,
+) -> Optional[dict[str, Any]]:
+    """Call Ollama LLM for relationship classification.
+
+    Args:
+        prompt: The prompt to send to the LLM
+        host: Ollama server host URL
+        model: Model to use for generation
+        timeout: Request timeout in seconds
+
+    Returns:
+        Parsed JSON response or None if failed
+    """
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{host}/api/generate",
+                json={
+                    "model": model,
+                    "prompt": prompt,
+                    "stream": False,
+                    "format": "json",
+                },
+            )
+            response.raise_for_status()
+            result = response.json()
+            response_text = result.get("response", "")
+            try:
+                return json.loads(response_text)
+            except json.JSONDecodeError:
+                json_match = re.search(r"\{[^}]+\}", response_text)
+                if json_match:
+                    return json.loads(json_match.group())
+                logger.warning(f"Failed to parse LLM response: {response_text}")
+                return None
+    except Exception as e:
+        logger.debug(f"Ollama LLM call failed: {e}")
+        return None
 
 
 def _is_memory_id(value: str) -> bool:
@@ -109,6 +179,7 @@ class MemoryTools:
         store: SQLiteStore,
         validation_loop: ValidationLoop,
         hybrid_store: Optional[HybridStore] = None,
+        settings: Optional[TheoSettings] = None,
     ) -> None:
         """Initialize MemoryTools with dependencies.
 
@@ -117,11 +188,13 @@ class MemoryTools:
             store: SQLiteStore instance for all storage operations
             validation_loop: ValidationLoop for confidence scoring
             hybrid_store: Optional HybridStore for graph operations
+            settings: Optional TheoSettings for LLM configuration
         """
         self._daemon = daemon_client
         self._store = store
         self._validation = validation_loop
         self._hybrid = hybrid_store
+        self._settings = settings
 
     def _compute_hash(self, content: str) -> str:
         """Compute SHA-256 hash of content for deduplication.
@@ -145,6 +218,166 @@ class MemoryTools:
         """
         short_uuid = uuid.uuid4().hex[:8]
         return f"mem_{memory_type.value}_{short_uuid}"
+
+    async def _infer_relationships(
+        self,
+        memory_id: str,
+        content: str,
+        namespace: str,
+    ) -> list[dict[str, Any]]:
+        """Automatically infer and create relationships to existing memories.
+
+        Uses embedding similarity to find related memories and creates 'relates_to'
+        edges. If LLM is available, attempts to classify more specific relation types
+        (supersedes, caused_by, contradicts).
+
+        This function ALWAYS creates edges for sufficiently similar memories,
+        regardless of LLM availability. The LLM is only used for type refinement.
+
+        Args:
+            memory_id: ID of the newly stored memory
+            content: Content of the new memory
+            namespace: Namespace to search within
+
+        Returns:
+            List of created relationship dicts with target_id, relation, similarity,
+            confidence, and reason
+        """
+        created_relationships: list[dict[str, Any]] = []
+
+        if not self._hybrid:
+            return created_relationships
+
+        # Search for similar memories
+        try:
+            search_result = await self.memory_recall(
+                query=content,
+                n_results=MAX_AUTO_RELATIONSHIPS + 5,
+                namespace=namespace,
+                include_related=False,
+            )
+        except Exception as e:
+            logger.debug(f"Failed to search for similar memories: {e}")
+            return created_relationships
+
+        if not search_result.get("success"):
+            return created_relationships
+
+        similar_memories = search_result.get("data", {}).get("memories", [])
+
+        # Filter candidates by similarity threshold and exclude self
+        candidates = [
+            mem
+            for mem in similar_memories
+            if mem["id"] != memory_id
+            and mem.get("similarity", 0.0) >= RELATIONSHIP_SIMILARITY_THRESHOLD
+        ]
+
+        if not candidates:
+            return created_relationships
+
+        # Get LLM config from settings
+        ollama_host = "http://localhost:11434"
+        ollama_model = ""
+        ollama_timeout = 30
+        if self._settings:
+            ollama_host = self._settings.ollama_host
+            ollama_model = self._settings.ollama_llm_model
+            ollama_timeout = self._settings.ollama_timeout
+
+        for candidate in candidates[:MAX_AUTO_RELATIONSHIPS]:
+            if len(created_relationships) >= MAX_AUTO_RELATIONSHIPS:
+                break
+
+            candidate_content = candidate.get("content", "")
+            candidate_id = candidate["id"]
+            similarity = candidate.get("similarity", 0.0)
+
+            # Default: create relates_to edge based on embedding similarity alone
+            rel_type = RelationType.RELATES_TO
+            confidence = similarity
+            reason = f"Semantic similarity: {similarity:.2f}"
+
+            # Optionally try LLM classification to upgrade edge type
+            if ollama_model:
+                prompt = RELATIONSHIP_CLASSIFICATION_PROMPT.format(
+                    new_memory=content,
+                    existing_memory=candidate_content,
+                )
+
+                llm_result = await _call_ollama_for_relationship(
+                    prompt=prompt,
+                    host=ollama_host,
+                    model=ollama_model,
+                    timeout=ollama_timeout,
+                )
+
+                if llm_result:
+                    llm_relation = llm_result.get("relation", "none")
+                    llm_confidence = llm_result.get("confidence", 0.0)
+                    llm_reason = llm_result.get("reason", "")
+
+                    # Only upgrade if LLM found more specific relation with high confidence
+                    if (
+                        llm_relation != "none"
+                        and llm_relation != "relates_to"
+                        and llm_confidence >= 0.6
+                    ):
+                        try:
+                            rel_type = RelationType(llm_relation)
+                            confidence = llm_confidence
+                            reason = llm_reason
+                        except ValueError:
+                            pass  # Keep default relates_to
+
+            try:
+                # Check if edge already exists
+                existing_edges = self._store.get_edges(
+                    memory_id, direction="outgoing", edge_type=rel_type.value
+                )
+                edge_exists = any(e["target_id"] == candidate_id for e in existing_edges)
+
+                if not edge_exists:
+                    self._hybrid.add_edge(
+                        source_id=memory_id,
+                        target_id=candidate_id,
+                        edge_type=rel_type.value,
+                        weight=confidence,
+                        metadata={
+                            "reason": reason,
+                            "auto_inferred": True,
+                            "similarity": similarity,
+                        },
+                    )
+
+                    # Handle supersedes: reduce importance of superseded memory
+                    if rel_type == RelationType.SUPERSEDES:
+                        target_memory = await self._hybrid.get_memory(candidate_id)
+                        if target_memory:
+                            current_importance = target_memory.get("importance", 0.5)
+                            await self._hybrid.update_memory(
+                                candidate_id, importance=current_importance * 0.5
+                            )
+
+                    created_relationships.append(
+                        {
+                            "target_id": candidate_id,
+                            "relation": rel_type.value,
+                            "similarity": similarity,
+                            "confidence": confidence,
+                            "reason": reason,
+                        }
+                    )
+
+                    logger.info(
+                        f"Auto-linked: {memory_id} --[{rel_type.value}]--> {candidate_id} "
+                        f"(similarity: {similarity:.2f}, reason: {reason})"
+                    )
+
+            except Exception as e:
+                logger.debug(f"Failed to create edge {memory_id} -> {candidate_id}: {e}")
+
+        return created_relationships
 
     async def memory_store(
         self,
@@ -350,6 +583,14 @@ class MemoryTools:
                         )
                     except Exception as e:
                         relation_errors.append(f"Failed to create relation to '{target_id}': {e}")
+
+            # Auto-infer relationships to existing memories
+            auto_relations = await self._infer_relationships(
+                memory_id=memory_id,
+                content=content,
+                namespace=namespace,
+            )
+            created_relations.extend(auto_relations)
 
             # Extract auto-superseded IDs for return value
             superseded_ids = [rel["target_id"] for rel in auto_supersedes]

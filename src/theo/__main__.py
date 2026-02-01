@@ -276,6 +276,7 @@ def initialize_components(args: argparse.Namespace) -> dict[str, Any]:
             store=sqlite_store,
             validation_loop=validation_loop,
             hybrid_store=hybrid_store,
+            settings=settings,
         )
         components["memory_tools"] = memory_tools
 
