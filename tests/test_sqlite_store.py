@@ -830,6 +830,60 @@ class TestEdgeOperations:
         with pytest.raises(ValueError, match="Weight must be between"):
             store.add_edge(id1, id2, "contradicts", weight=-0.1)
 
+    def test_find_orphan_memories(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
+        """Test finding memories with no edges."""
+        # Create memories - some will be connected, some orphaned
+        id1 = store.add_memory(content="Connected 1", embedding=mock_embedding)
+        id2 = store.add_memory(content="Connected 2", embedding=mock_embedding)
+        id3 = store.add_memory(content="Orphan 1", embedding=mock_embedding)
+        id4 = store.add_memory(content="Orphan 2", embedding=mock_embedding)
+
+        # Connect id1 and id2 with an edge
+        store.add_edge(id1, id2, "relates_to")
+
+        # Find orphans
+        orphans = store.find_orphan_memories()
+        orphan_ids = [m["id"] for m in orphans]
+
+        # id1 and id2 have edges, id3 and id4 are orphans
+        assert id3 in orphan_ids
+        assert id4 in orphan_ids
+        assert id1 not in orphan_ids
+        assert id2 not in orphan_ids
+
+    def test_count_orphan_memories(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
+        """Test counting orphan memories."""
+        # Initially empty
+        assert store.count_orphan_memories() == 0
+
+        # Add orphan memories
+        id1 = store.add_memory(content="Orphan 1", embedding=mock_embedding)
+        id2 = store.add_memory(content="Orphan 2", embedding=mock_embedding)
+
+        assert store.count_orphan_memories() == 2
+
+        # Connect them - no longer orphans
+        store.add_edge(id1, id2, "relates_to")
+
+        assert store.count_orphan_memories() == 0
+
+    def test_find_orphan_memories_with_namespace(
+        self, store: SQLiteStore, mock_embedding: list[float]
+    ) -> None:
+        """Test finding orphan memories with namespace filter."""
+        # Create orphans in different namespaces
+        store.add_memory(content="NS1 Orphan", embedding=mock_embedding, namespace="ns1")
+        store.add_memory(content="NS2 Orphan", embedding=mock_embedding, namespace="ns2")
+
+        # Find orphans in ns1 only
+        ns1_orphans = store.find_orphan_memories(namespace="ns1")
+        assert len(ns1_orphans) == 1
+        assert ns1_orphans[0]["namespace"] == "ns1"
+
+        # Total orphans
+        all_orphans = store.find_orphan_memories()
+        assert len(all_orphans) == 2
+
 
 # ============================================================================
 # Validation Event Tests
