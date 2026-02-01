@@ -170,16 +170,24 @@ def format_context(memories: list[dict]) -> str | None:
     lines = ["# Relevant Memories (RFC 2119)", ""]
 
     # Categorize by RFC level
-    # MUST: golden_rule type OR confidence >= 0.9
+    # MUST: golden_rule type first, then confidence >= 0.9
     # SHOULD: importance >= 0.8 OR confidence >= 0.7
     # MAY: everything else that passed the filter
-    must = [m for m in relevant if m.get("type") == "golden_rule" or m.get("confidence", 0) >= 0.9]
+    golden_rules = [m for m in relevant if m.get("type") == "golden_rule"]
+    high_confidence = [m for m in relevant if m.get("type") != "golden_rule" and m.get("confidence", 0) >= 0.9]
+    must = golden_rules + high_confidence  # Golden rules always first
     should = [m for m in relevant if m not in must and (m.get("importance", 0) >= 0.8 or m.get("confidence", 0) >= 0.7)]
     may = [m for m in relevant if m not in must and m not in should]
 
     if must:
         lines.append("## MUST (Required)")
-        for mem in must[:3]:
+        # Show all golden rules (up to 5), then up to 2 high-confidence
+        shown = 0
+        for mem in golden_rules[:5]:
+            content = mem.get("content", "")[:300]
+            lines.append(f"- {content}")
+            shown += 1
+        for mem in high_confidence[:max(0, 3 - shown)]:
             content = mem.get("content", "")[:300]
             lines.append(f"- {content}")
         lines.append("")
