@@ -765,18 +765,20 @@ class TestEndToEndPipeline:
         assert recall_result["success"] is True
         assert recall_result["data"]["total"] >= 1
 
-        # Step 3: Validate memory (helpful)
-        validate_result = await memory_tools.memory_validate(
+        # Step 3: Validate memory (helpful) via memory_outcome with skip_event=True
+        validate_result = await memory_tools.memory_outcome(
             memory_id=memory_id,
-            was_helpful=True,
+            success=True,
+            skip_event=True,
         )
         assert validate_result["success"] is True
         initial_confidence = validate_result["data"]["new_confidence"]
 
         # Step 4: Validate again (not helpful)
-        validate_result2 = await memory_tools.memory_validate(
+        validate_result2 = await memory_tools.memory_outcome(
             memory_id=memory_id,
-            was_helpful=False,
+            success=False,
+            skip_event=True,
         )
         assert validate_result2["success"] is True
         # Confidence should decrease
