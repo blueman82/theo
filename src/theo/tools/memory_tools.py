@@ -179,6 +179,7 @@ class MemoryTools:
         store: SQLiteStore,
         validation_loop: ValidationLoop,
         hybrid_store: Optional[HybridStore] = None,
+        settings: Optional[TheoSettings] = None,
     ) -> None:
         """Initialize MemoryTools with dependencies.
 
@@ -187,11 +188,13 @@ class MemoryTools:
             store: SQLiteStore instance for all storage operations
             validation_loop: ValidationLoop for confidence scoring
             hybrid_store: Optional HybridStore for graph operations
+            settings: Optional TheoSettings for LLM configuration
         """
         self._daemon = daemon_client
         self._store = store
         self._validation = validation_loop
         self._hybrid = hybrid_store
+        self._settings = settings
 
     def _compute_hash(self, content: str) -> str:
         """Compute SHA-256 hash of content for deduplication.
