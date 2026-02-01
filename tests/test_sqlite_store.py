@@ -16,8 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from theo.storage.sqlite_store import SQLiteStore, SQLiteStoreError, SearchResult
-
+from theo.storage.sqlite_store import SearchResult, SQLiteStore
 
 # ============================================================================
 # Fixtures
@@ -195,9 +194,7 @@ class TestMemoryCRUD:
 class TestListAndCount:
     """Test list_memories and count_memories with filters."""
 
-    def test_list_memories_no_filter(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_list_memories_no_filter(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test listing all memories without filters."""
         # Add multiple memories
         store.add_memory(content="Memory 1", embedding=mock_embedding)
@@ -322,7 +319,7 @@ class TestVectorSearch:
         """Test KNN search returns results ordered by similarity."""
         # Add memories with different embeddings
         id1 = store.add_memory(content="Similar to query", embedding=mock_embedding)
-        id2 = store.add_memory(content="Different content", embedding=mock_embedding_alt)
+        store.add_memory(content="Different content", embedding=mock_embedding_alt)
 
         # Search with query similar to mock_embedding
         results = store.search_vector(embedding=mock_embedding, n_results=5)
@@ -335,9 +332,7 @@ class TestVectorSearch:
         assert results[0].id == id1
         assert results[0].score >= results[1].score
 
-    def test_search_vector_n_results(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_search_vector_n_results(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test search_vector respects n_results limit."""
         # Add 5 memories
         for i in range(5):
@@ -392,7 +387,9 @@ class TestVectorSearch:
         for r in results:
             assert r.memory_type == "fact"
 
-    def test_search_vector_empty_collection(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
+    def test_search_vector_empty_collection(
+        self, store: SQLiteStore, mock_embedding: list[float]
+    ) -> None:
         """Test search_vector on empty collection returns empty list."""
         results = store.search_vector(embedding=mock_embedding, n_results=5)
         assert results == []
@@ -434,9 +431,7 @@ class TestFTSSearch:
         results = store.search_fts(query="nonexistent", n_results=5)
         assert len(results) == 0
 
-    def test_search_fts_bm25_ranking(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_search_fts_bm25_ranking(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test FTS5 results are ranked by relevance (BM25)."""
         # Add documents with varying keyword frequency
         store.add_memory(
@@ -454,9 +449,7 @@ class TestFTSSearch:
         # Document with more Python mentions should rank higher
         assert results[0].content.count("Python") >= results[1].content.count("Python")
 
-    def test_search_fts_with_filter(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_search_fts_with_filter(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test FTS5 search with namespace filter."""
         store.add_memory(
             content="Python programming",
@@ -582,9 +575,7 @@ class TestEmbeddingCache:
         )
         assert result is None
 
-    def test_embedding_cache_hit(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_embedding_cache_hit(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test cache hit returns stored embedding."""
         content_hash = "abc123hash"
         provider = "mlx"
@@ -711,9 +702,7 @@ class TestGoldenRuleThreshold:
         assert mem_at["confidence"] >= 0.9  # Golden
         assert mem_above["confidence"] >= 0.9  # Golden
 
-    def test_update_to_golden_rule(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_update_to_golden_rule(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test updating a memory to golden rule status."""
         memory_id = store.add_memory(
             content="Will become golden",
@@ -780,9 +769,7 @@ class TestEdgeOperations:
         incoming = store.get_edges(id1, direction="incoming")
         assert len(incoming) == 0
 
-    def test_get_edges_by_type(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_get_edges_by_type(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test filtering edges by type."""
         id1 = store.add_memory(content="Memory 1", embedding=mock_embedding)
         id2 = store.add_memory(content="Memory 2", embedding=mock_embedding)
@@ -796,9 +783,7 @@ class TestEdgeOperations:
         assert len(relates_edges) == 1
         assert relates_edges[0]["edge_type"] == "relates_to"
 
-        contradicts_edges = store.get_edges(
-            id1, direction="outgoing", edge_type="contradicts"
-        )
+        contradicts_edges = store.get_edges(id1, direction="outgoing", edge_type="contradicts")
         assert len(contradicts_edges) == 1
         assert contradicts_edges[0]["edge_type"] == "contradicts"
 
@@ -826,9 +811,7 @@ class TestEdgeOperations:
         deleted = store.delete_edge("fake_id1", "fake_id2", "relates_to")
         assert deleted is False
 
-    def test_edge_weight_validation(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_edge_weight_validation(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test edge weight must be between 0.0 and 1.0."""
         id1 = store.add_memory(content="Memory 1", embedding=mock_embedding)
         id2 = store.add_memory(content="Memory 2", embedding=mock_embedding)
@@ -853,9 +836,7 @@ class TestEdgeOperations:
 class TestValidationEvents:
     """Test validation event tracking (TRY/LEARN cycle)."""
 
-    def test_add_validation_event(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_add_validation_event(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test adding validation events."""
         memory_id = store.add_memory(content="Test memory", embedding=mock_embedding)
 
@@ -870,9 +851,7 @@ class TestValidationEvents:
         assert event_id is not None
         assert event_id > 0
 
-    def test_get_validation_events(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_get_validation_events(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test retrieving validation events."""
         memory_id = store.add_memory(content="Test memory", embedding=mock_embedding)
 
@@ -905,9 +884,7 @@ class TestErrorHandling:
         # (Most operations are designed to be safe, so we test specific cases)
         pass  # SQLiteStore is fairly robust against invalid inputs
 
-    def test_empty_content(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_empty_content(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test handling empty content."""
         # Empty content should still work (though not recommended)
         memory_id = store.add_memory(content="", embedding=mock_embedding)
@@ -917,9 +894,7 @@ class TestErrorHandling:
         assert memory is not None
         assert memory["content"] == ""
 
-    def test_update_with_no_fields(
-        self, store: SQLiteStore, mock_embedding: list[float]
-    ) -> None:
+    def test_update_with_no_fields(self, store: SQLiteStore, mock_embedding: list[float]) -> None:
         """Test update_memory with no fields returns False."""
         memory_id = store.add_memory(content="Test", embedding=mock_embedding)
         updated = store.update_memory(memory_id)
