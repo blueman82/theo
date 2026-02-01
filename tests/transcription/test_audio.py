@@ -157,7 +157,7 @@ class TestAudioCaptureCallback:
         mock_sd = mocker.patch("theo.transcription.audio.sd")
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
-        mock_sd.query_devices.return_value = {"default_samplerate": 16000}
+        mock_sd.query_devices.return_value = {"default_samplerate": 16000, "name": "Mock Device"}
 
         from theo.transcription.audio import AudioCapture
 
