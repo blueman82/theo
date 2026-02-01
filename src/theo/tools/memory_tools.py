@@ -51,22 +51,21 @@ logger = logging.getLogger(__name__)
 RELATIONSHIP_SIMILARITY_THRESHOLD = 0.6
 MAX_AUTO_RELATIONSHIPS = 5
 
-RELATIONSHIP_CLASSIFICATION_PROMPT = """You are analyzing the relationship between two memories in a knowledge graph.
-
-New Memory: {new_memory}
-Existing Memory: {existing_memory}
-
-Determine the most appropriate relationship type from the new memory TO the existing memory:
-
-1. "relates_to" - General topical relationship (same subject area, related concepts)
-2. "supersedes" - New memory replaces/updates the existing one (newer info about same thing)
-3. "caused_by" - New memory is a consequence or result of the existing memory
-4. "contradicts" - Memories make incompatible claims (use sparingly, only for direct conflicts)
-
-If no meaningful relationship exists, respond with "none".
-
-Respond with ONLY a JSON object:
-{{"relation": "relates_to|supersedes|caused_by|contradicts|none", "confidence": 0.0-1.0, "reason": "brief explanation"}}"""
+RELATIONSHIP_CLASSIFICATION_PROMPT = (
+    "You are analyzing the relationship between two memories in a knowledge graph.\n\n"
+    "New Memory: {new_memory}\n"
+    "Existing Memory: {existing_memory}\n\n"
+    "Determine the most appropriate relationship type from the new memory TO the existing memory:\n\n"
+    '1. "relates_to" - General topical relationship (same subject area, related concepts)\n'
+    '2. "supersedes" - New memory replaces/updates the existing one (newer info about same thing)\n'
+    '3. "caused_by" - New memory is a consequence or result of the existing memory\n'
+    '4. "contradicts" - Memories make incompatible claims (use sparingly, only for direct conflicts)'
+    "\n\n"
+    'If no meaningful relationship exists, respond with "none".\n\n'
+    "Respond with ONLY a JSON object:\n"
+    '{{"relation": "relates_to|supersedes|caused_by|contradicts|none", '
+    '"confidence": 0.0-1.0, "reason": "brief explanation"}}'
+)
 
 
 async def _call_ollama_for_relationship(
