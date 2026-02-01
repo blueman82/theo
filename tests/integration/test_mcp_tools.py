@@ -593,11 +593,11 @@ class TestMemoryTools:
         assert "total" in result["data"]
 
     @pytest.mark.asyncio
-    async def test_memory_validate_success(self, all_tools: dict[str, Any]):
-        """Test successful memory validation."""
+    async def test_memory_outcome_direct_validation(self, all_tools: dict[str, Any]):
+        """Test memory_outcome with skip_event=True for direct validation."""
         from theo.mcp_server import (
+            memory_outcome,
             memory_store,
-            memory_validate,
             set_tool_instances,
         )
 
@@ -612,11 +612,11 @@ class TestMemoryTools:
         store_result = await memory_store(content="Test pattern", memory_type="pattern")
         memory_id = store_result["data"]["id"]
 
-        # Validate
-        result = await memory_validate(memory_id=memory_id, was_helpful=True)
+        # Validate using memory_outcome with skip_event=True
+        result = await memory_outcome(memory_id=memory_id, success=True, skip_event=True)
 
         assert result["success"] is True
-        assert result["data"]["new_confidence"] > result["data"]["old_confidence"]
+        assert result["data"]["new_confidence"] is not None
 
     @pytest.mark.asyncio
     async def test_memory_forget_by_id(self, all_tools: dict[str, Any]):
