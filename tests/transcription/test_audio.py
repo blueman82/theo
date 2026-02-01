@@ -1,11 +1,14 @@
 """Tests for audio capture module.
 
 Tests AudioCapture with mocked sounddevice dependencies.
+Module mocks are set up in conftest.py.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import numpy as np
+
+from theo.transcription.audio import AudioCapture
 
 
 class TestAudioCapture:
@@ -13,56 +16,33 @@ class TestAudioCapture:
 
     def test_audio_capture_init(self) -> None:
         """Verify default sample_rate=16000 and channels=1."""
-        with patch.dict(
-            "sys.modules",
-            {
-                "sounddevice": MagicMock(),
-                "scipy": MagicMock(),
-                "scipy.signal": MagicMock(),
-            },
-        ):
-            from theo.transcription.audio import AudioCapture
+        capture = AudioCapture()
 
-            capture = AudioCapture()
-
-            assert capture._target_sample_rate == 16000
-            assert capture._channels == 1
-            assert capture._chunk_duration == 1.0
-            assert capture._device is None
+        assert capture._target_sample_rate == 16000
+        assert capture._channels == 1
+        assert capture._chunk_duration == 1.0
+        assert capture._device is None
 
     def test_audio_capture_init_custom_params(self) -> None:
         """Verify custom parameters are accepted."""
-        with patch.dict(
-            "sys.modules",
-            {
-                "sounddevice": MagicMock(),
-                "scipy": MagicMock(),
-                "scipy.signal": MagicMock(),
-            },
-        ):
-            from theo.transcription.audio import AudioCapture
+        capture = AudioCapture(
+            sample_rate=44100,
+            channels=2,
+            chunk_duration=0.5,
+            device=1,
+        )
 
-            capture = AudioCapture(
-                sample_rate=44100,
-                channels=2,
-                chunk_duration=0.5,
-                device=1,
-            )
-
-            assert capture._target_sample_rate == 44100
-            assert capture._channels == 2
-            assert capture._chunk_duration == 0.5
-            assert capture._device == 1
+        assert capture._target_sample_rate == 44100
+        assert capture._channels == 2
+        assert capture._chunk_duration == 0.5
+        assert capture._device == 1
 
     def test_audio_capture_start_stop(self, mocker: MagicMock) -> None:
         """Mock sounddevice.InputStream, verify state transitions."""
-        # Mock sounddevice module
         mock_sd = mocker.patch("theo.transcription.audio.sd")
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
         mock_sd.query_devices.return_value = {"default_samplerate": 48000}
-
-        from theo.transcription.audio import AudioCapture
 
         capture = AudioCapture()
 
@@ -90,8 +70,6 @@ class TestAudioCapture:
         mock_sd.InputStream.return_value = mock_stream
         mock_sd.query_devices.return_value = {"default_samplerate": 48000}
 
-        from theo.transcription.audio import AudioCapture
-
         capture = AudioCapture()
         capture.start()
         capture.start()  # Second start should do nothing
@@ -102,8 +80,6 @@ class TestAudioCapture:
     def test_audio_capture_stop_idempotent(self, mocker: MagicMock) -> None:
         """Stopping when not recording should be idempotent."""
         mocker.patch("theo.transcription.audio.sd")
-
-        from theo.transcription.audio import AudioCapture
 
         capture = AudioCapture()
         capture.stop()  # Should not raise
@@ -116,8 +92,6 @@ class TestAudioCapture:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
         mock_sd.query_devices.return_value = {"default_samplerate": 48000}
-
-        from theo.transcription.audio import AudioCapture
 
         with AudioCapture() as capture:
             capture.start()
@@ -132,8 +106,6 @@ class TestAudioCapture:
         mock_stream = MagicMock()
         mock_sd.InputStream.return_value = mock_stream
         mock_sd.query_devices.return_value = {"default_samplerate": 48000}
-
-        from theo.transcription.audio import AudioCapture
 
         capture = AudioCapture()
 
@@ -159,13 +131,11 @@ class TestAudioCaptureCallback:
         mock_sd.InputStream.return_value = mock_stream
         mock_sd.query_devices.return_value = {"default_samplerate": 16000, "name": "Mock Device"}
 
-        from theo.transcription.audio import AudioCapture
-
         capture = AudioCapture()
         capture.start()
 
         # Simulate callback with non-silent audio data (must exceed RMS threshold of 0.01)
-        indata = np.full((16000, 1), 0.1, dtype=np.float32)  # Non-zero audio data
+        indata = np.full((16000, 1), 0.1, dtype=np.float32)
         mock_status = MagicMock()
         mock_status.__bool__ = MagicMock(return_value=False)
 
