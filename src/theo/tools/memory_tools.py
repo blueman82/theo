@@ -2120,3 +2120,113 @@ class MemoryTools:
                 "success": False,
                 "error": str(e),
             }
+
+    async def memory_backfill_edges(
+        self,
+        namespace: Optional[str] = None,
+        batch_size: int = 50,
+        max_memories: int = 500,
+        dry_run: bool = False,
+    ) -> dict[str, Any]:
+        """Backfill edges for orphan memories (memories with no graph connections).
+
+        This tool finds memories that have no edges and runs relationship inference
+        to connect them to similar memories. Use this to repair the knowledge graph
+        after importing memories or if relationship inference was previously disabled.
+
+        Args:
+            namespace: Limit to specific namespace (optional)
+            batch_size: Process this many memories per batch (default: 50)
+            max_memories: Maximum total memories to process (default: 500)
+            dry_run: If True, only count orphans without creating edges (default: False)
+
+        Returns:
+            Dictionary with:
+            - success: Boolean indicating operation success
+            - data: Dictionary with orphan count, processed count, edges created
+            - error: Error message if operation failed
+        """
+        try:
+            if not self._hybrid:
+                return {
+                    "success": False,
+                    "error": "Storage not initialized",
+                }
+
+            # Count total orphans
+            total_orphans = self._hybrid.count_orphan_memories(namespace=namespace)
+
+            if dry_run:
+                return {
+                    "success": True,
+                    "data": {
+                        "dry_run": True,
+                        "orphan_count": total_orphans,
+                        "namespace": namespace,
+                        "message": f"Found {total_orphans} orphan memories that would be processed",
+                    },
+                }
+
+            # Process orphans in batches
+            processed = 0
+            edges_created = 0
+            errors = []
+            offset = 0
+
+            while processed < max_memories:
+                # Fetch batch of orphans
+                orphans = self._hybrid.find_orphan_memories(
+                    namespace=namespace,
+                    limit=batch_size,
+                    offset=offset,
+                )
+
+                if not orphans:
+                    break
+
+                for orphan in orphans:
+                    if processed >= max_memories:
+                        break
+
+                    try:
+                        # Run relationship inference for this memory
+                        relations = await self._infer_relationships(
+                            memory_id=orphan["id"],
+                            content=orphan["content"],
+                            namespace=orphan["namespace"],
+                        )
+                        edges_created += len(relations)
+                        processed += 1
+                    except Exception as e:
+                        errors.append(f"{orphan['id']}: {str(e)}")
+                        processed += 1
+
+                # If we processed fewer than batch_size, we're done
+                if len(orphans) < batch_size:
+                    break
+
+                # Note: We don't increment offset because successfully processed
+                # memories are no longer orphans (they have edges now)
+
+            # Recount orphans after processing
+            remaining_orphans = self._hybrid.count_orphan_memories(namespace=namespace)
+
+            return {
+                "success": True,
+                "data": {
+                    "initial_orphan_count": total_orphans,
+                    "processed": processed,
+                    "edges_created": edges_created,
+                    "remaining_orphans": remaining_orphans,
+                    "errors": errors[:10] if errors else [],
+                    "error_count": len(errors),
+                    "namespace": namespace,
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"memory_backfill_edges failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
