@@ -1736,6 +1736,7 @@ class MemoryTools:
                         "namespace": doc["namespace"],
                         "importance": doc["importance"],
                         "confidence": doc["confidence"],
+                        "created_at": doc.get("created_at"),
                     }
                 )
 
