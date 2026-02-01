@@ -603,7 +603,7 @@ class TestMemoryTools:
         self, mock_daemon_client, mock_store, mock_validation_loop
     ):
         """Test supersedes_query only supersedes memories with similarity >= 0.7."""
-        from unittest.mock import AsyncMock
+        from unittest.mock import MagicMock
 
         from theo.storage.sqlite_store import SearchResult
         from theo.tools.memory_tools import MemoryTools
@@ -624,7 +624,8 @@ class TestMemoryTools:
         )
         mock_store.search_hybrid.return_value = [mock_result]
 
-        mock_hybrid = AsyncMock()
+        # Use MagicMock since add_edge is sync
+        mock_hybrid = MagicMock()
 
         tools = MemoryTools(
             daemon_client=mock_daemon_client,
