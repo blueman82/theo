@@ -8,15 +8,18 @@ This module tests SQLiteStore functionality including:
 - Embedding cache operations
 - Edge/relationship operations
 - Golden rule confidence threshold detection
+- Recency-based scoring
 
 Uses mock 1024-dimensional embeddings to match MLX mxbai-embed-large-v1.
 """
 
+import math
+import time
 from pathlib import Path
 
 import pytest
 
-from theo.storage.sqlite_store import SearchResult, SQLiteStore
+from theo.storage.sqlite_store import SearchResult, SQLiteStore, compute_recency_score
 
 # ============================================================================
 # Fixtures
@@ -899,3 +902,32 @@ class TestErrorHandling:
         memory_id = store.add_memory(content="Test", embedding=mock_embedding)
         updated = store.update_memory(memory_id)
         assert updated is False
+
+
+# ============================================================================
+# Recency Scoring Tests
+# ============================================================================
+
+
+class TestRecencyScoring:
+    """Test recency-based scoring for memory ranking."""
+
+    def test_new_memory_scores_high(self) -> None:
+        """Recently created memory should have near-full recency factor."""
+        now = time.time()
+        score = compute_recency_score(0.5, now, now, 0)
+        assert 0.45 < score < 0.55  # importance * ~1.0 recency * 1.0 access
+
+    def test_seven_day_old_memory_halves(self) -> None:
+        """7-day-old memory should have ~50% recency factor."""
+        now = time.time()
+        seven_days_ago = now - 7 * 86400
+        score = compute_recency_score(1.0, seven_days_ago, seven_days_ago, 0)
+        assert 0.45 < score < 0.55  # ~0.5 recency * 1.0 access
+
+    def test_high_access_boosts_score(self) -> None:
+        """Frequently accessed memory should score higher."""
+        now = time.time()
+        low = compute_recency_score(0.5, now, now, 0)
+        high = compute_recency_score(0.5, now, now, 10)
+        assert high > low * 2  # log(11) + 1 ≈ 3.4 vs 1.0

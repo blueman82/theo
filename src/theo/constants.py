@@ -27,6 +27,10 @@ LOW_CONFIDENCE_THRESHOLD = 0.15
 INITIAL_CONFIDENCE = 0.3
 DEMOTION_FAILURE_THRESHOLD = 3
 
+# Recency scoring (ported from Recall)
+RECENCY_HALF_LIFE_DAYS = 7
+RECENCY_DECAY_BASE = 0.5
+
 
 # =============================================================================
 # CONFIGURABLE SETTINGS (from .env)

@@ -22,6 +22,7 @@ Example:
 import hashlib
 import json
 import logging
+import math
 import sqlite3
 import struct
 import time
@@ -31,6 +32,8 @@ from typing import Any, Optional
 from uuid import uuid4
 
 import sqlite_vec
+
+from theo.constants import RECENCY_DECAY_BASE, RECENCY_HALF_LIFE_DAYS
 
 
 @dataclass
@@ -47,10 +50,34 @@ class SearchResult:
     source_file: str | None
     chunk_index: int
     metadata: dict | None = None
+    last_accessed: float | None = None
+    created_at: float | None = None
+    access_count: int = 0
 
 
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
+
+
+def compute_recency_score(
+    importance: float,
+    last_accessed: float | None,
+    created_at: float,
+    access_count: int,
+) -> float:
+    """Compute recency-weighted score for a memory.
+
+    Formula (from Recall): score = importance * recency_factor * access_factor
+    - recency_factor = 0.5^(age_days / 7)
+    - access_factor = log(access_count + 1) + 1
+    """
+    reference_time = last_accessed if last_accessed is not None else created_at
+    age_days = max(0.0, time.time() - reference_time) / 86400
+
+    recency_factor = RECENCY_DECAY_BASE ** (age_days / RECENCY_HALF_LIFE_DAYS)
+    access_factor = math.log(access_count + 1) + 1
+
+    return importance * recency_factor * access_factor
 
 
 class SQLiteStoreError(Exception):
@@ -1342,6 +1369,9 @@ class SQLiteStore:
                         source_file=row["source_file"],
                         chunk_index=row["chunk_index"],
                         metadata=tags,
+                        last_accessed=row["last_accessed"],
+                        created_at=row["created_at"],
+                        access_count=row["access_count"] or 0,
                     )
                 )
 
@@ -1419,6 +1449,9 @@ class SQLiteStore:
                         source_file=row["source_file"],
                         chunk_index=row["chunk_index"],
                         metadata=tags,
+                        last_accessed=row["last_accessed"],
+                        created_at=row["created_at"],
+                        access_count=row["access_count"] or 0,
                     )
                 )
 
@@ -1508,6 +1541,17 @@ class SQLiteStore:
                 if result.id not in result_map:
                     result_map[result.id] = result
 
+            # Apply recency weighting to combined scores
+            for memory_id in scores:
+                result = result_map[memory_id]
+                recency = compute_recency_score(
+                    result.importance,
+                    result.last_accessed,
+                    result.created_at or time.time(),
+                    result.access_count,
+                )
+                scores[memory_id] *= recency
+
             # Sort by combined score
             sorted_ids = sorted(scores.keys(), key=lambda x: scores[x], reverse=True)
 
@@ -1528,6 +1572,9 @@ class SQLiteStore:
                         source_file=result.source_file,
                         chunk_index=result.chunk_index,
                         metadata=result.metadata,
+                        last_accessed=result.last_accessed,
+                        created_at=result.created_at,
+                        access_count=result.access_count,
                     )
                 )
 
