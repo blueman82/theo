@@ -551,48 +551,25 @@ class HybridStore:
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Find memories with no edges (neither source nor target).
-
-        Args:
-            namespace: Optional namespace filter
-            limit: Maximum number of results
-            offset: Offset for pagination
-
-        Returns:
-            List of orphan memory dicts
-        """
+        """Find memories with no edges (neither source nor target)."""
         results = self._sqlite.find_orphan_memories(
-            namespace=namespace,
-            limit=limit,
-            offset=offset,
+            namespace=namespace, limit=limit, offset=offset
         )
-
-        # Convert to HybridStore format
-        memories = []
-        for r in results:
-            memories.append(
-                {
-                    "id": r["id"],
-                    "content": r["content"],
-                    "type": r["memory_type"],
-                    "namespace": r["namespace"],
-                    "importance": r["importance"],
-                    "confidence": r["confidence"],
-                    "created_at": r.get("created_at"),
-                }
-            )
-
-        return memories
+        return [
+            {
+                "id": r["id"],
+                "content": r["content"],
+                "type": r["memory_type"],
+                "namespace": r["namespace"],
+                "importance": r["importance"],
+                "confidence": r["confidence"],
+                "created_at": r.get("created_at"),
+            }
+            for r in results
+        ]
 
     def count_orphan_memories(self, namespace: str | None = None) -> int:
-        """Count memories with no edges.
-
-        Args:
-            namespace: Optional namespace filter
-
-        Returns:
-            Number of orphan memories
-        """
+        """Count memories with no edges."""
         return self._sqlite.count_orphan_memories(namespace=namespace)
 
     def get_edges(
