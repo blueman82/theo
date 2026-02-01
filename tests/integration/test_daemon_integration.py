@@ -29,7 +29,6 @@ from theo.daemon import (
 )
 from theo.daemon.protocol import DaemonRequest, DaemonResponse, EmbedJob
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -567,9 +566,7 @@ class TestClientServerIntegration:
                 if temp_socket_path.exists():
                     # Try a raw socket connection to verify server is truly ready
                     try:
-                        reader, writer = await asyncio.open_unix_connection(
-                            str(temp_socket_path)
-                        )
+                        reader, writer = await asyncio.open_unix_connection(str(temp_socket_path))
                         writer.close()
                         await writer.wait_closed()
                         break  # Server is ready
@@ -668,9 +665,7 @@ class TestClientServerIntegration:
                 if temp_socket_path.exists():
                     # Try a raw socket connection to verify server is truly ready
                     try:
-                        reader, writer = await asyncio.open_unix_connection(
-                            str(temp_socket_path)
-                        )
+                        reader, writer = await asyncio.open_unix_connection(str(temp_socket_path))
                         writer.close()
                         await writer.wait_closed()
                         break  # Server is ready

@@ -11,15 +11,11 @@ Tests use mocks to isolate components and avoid network/file system dependencies
 """
 
 import asyncio
-import hashlib
-from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from theo.storage.sqlite_store import SearchResult
-
 
 # =============================================================================
 # Fixtures
@@ -57,16 +53,56 @@ def mock_store():
     store.count_memories.return_value = 10
     store.count_edges.return_value = 5
     store.list_memories.return_value = [
-        {"id": "1", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
-        {"id": "2", "memory_type": "document", "source_file": "/path/to/file2.py", "namespace": "default"},
-        {"id": "3", "memory_type": "document", "source_file": "/path/to/file3.py", "namespace": "default"},
-        {"id": "4", "memory_type": "document", "source_file": "/path/to/file4.md", "namespace": "project1"},
-        {"id": "5", "memory_type": "document", "source_file": "/path/to/file5.txt", "namespace": "project1"},
+        {
+            "id": "1",
+            "memory_type": "document",
+            "source_file": "/path/to/file1.md",
+            "namespace": "default",
+        },
+        {
+            "id": "2",
+            "memory_type": "document",
+            "source_file": "/path/to/file2.py",
+            "namespace": "default",
+        },
+        {
+            "id": "3",
+            "memory_type": "document",
+            "source_file": "/path/to/file3.py",
+            "namespace": "default",
+        },
+        {
+            "id": "4",
+            "memory_type": "document",
+            "source_file": "/path/to/file4.md",
+            "namespace": "project1",
+        },
+        {
+            "id": "5",
+            "memory_type": "document",
+            "source_file": "/path/to/file5.txt",
+            "namespace": "project1",
+        },
         {"id": "6", "memory_type": "memory", "source_file": None, "namespace": "default"},
         {"id": "7", "memory_type": "memory", "source_file": None, "namespace": "default"},
-        {"id": "8", "memory_type": "document", "source_file": "/path/to/file1.md", "namespace": "default"},
-        {"id": "9", "memory_type": "document", "source_file": "/path/to/file2.py", "namespace": "project1"},
-        {"id": "10", "memory_type": "document", "source_file": "/path/to/file3.py", "namespace": "default"},
+        {
+            "id": "8",
+            "memory_type": "document",
+            "source_file": "/path/to/file1.md",
+            "namespace": "default",
+        },
+        {
+            "id": "9",
+            "memory_type": "document",
+            "source_file": "/path/to/file2.py",
+            "namespace": "project1",
+        },
+        {
+            "id": "10",
+            "memory_type": "document",
+            "source_file": "/path/to/file3.py",
+            "namespace": "default",
+        },
     ]
     # Mock methods used by IndexingTools
     store.get_by_hash.return_value = None
@@ -128,9 +164,7 @@ def mock_feedback_collector():
 class TestIndexingTools:
     """Tests for IndexingTools."""
 
-    def test_index_file_file_not_found(
-        self, mock_daemon_client, mock_chunker_registry, mock_store
-    ):
+    def test_index_file_file_not_found(self, mock_daemon_client, mock_chunker_registry, mock_store):
         """Test index_file returns error when file not found."""
         from theo.tools.indexing_tools import IndexingTools
 
@@ -239,9 +273,7 @@ class TestIndexingTools:
 class TestQueryTools:
     """Tests for QueryTools."""
 
-    def test_search_empty_query(
-        self, mock_daemon_client, mock_store, mock_feedback_collector
-    ):
+    def test_search_empty_query(self, mock_daemon_client, mock_store, mock_feedback_collector):
         """Test search returns error for empty query."""
         from theo.tools.query_tools import QueryTools
 
@@ -258,9 +290,7 @@ class TestQueryTools:
         assert result["success"] is False
         assert "empty" in result["error"].lower()
 
-    def test_search_success(
-        self, mock_daemon_client, mock_store, mock_feedback_collector
-    ):
+    def test_search_success(self, mock_daemon_client, mock_store, mock_feedback_collector):
         """Test successful search."""
         from theo.tools.query_tools import QueryTools
 
@@ -293,9 +323,7 @@ class TestQueryTools:
         assert result["data"]["results"][0]["id"] == "doc_1"
         assert result["data"]["results"][0]["similarity"] == 0.9
 
-    def test_search_with_budget(
-        self, mock_daemon_client, mock_store, mock_feedback_collector
-    ):
+    def test_search_with_budget(self, mock_daemon_client, mock_store, mock_feedback_collector):
         """Test search with token budget."""
         from theo.tools.query_tools import QueryTools
 
@@ -340,9 +368,7 @@ class TestQueryTools:
 class TestMemoryTools:
     """Tests for MemoryTools."""
 
-    def test_memory_store_empty_content(
-        self, mock_daemon_client, mock_store, mock_validation_loop
-    ):
+    def test_memory_store_empty_content(self, mock_daemon_client, mock_store, mock_validation_loop):
         """Test memory_store returns error for empty content."""
         from theo.tools.memory_tools import MemoryTools
 
@@ -361,9 +387,7 @@ class TestMemoryTools:
         assert result["success"] is False
         assert "empty" in result["error"].lower()
 
-    def test_memory_store_invalid_type(
-        self, mock_daemon_client, mock_store, mock_validation_loop
-    ):
+    def test_memory_store_invalid_type(self, mock_daemon_client, mock_store, mock_validation_loop):
         """Test memory_store returns error for invalid memory type."""
         from theo.tools.memory_tools import MemoryTools
 
@@ -386,9 +410,7 @@ class TestMemoryTools:
         assert result["success"] is False
         assert "invalid" in result["error"].lower()
 
-    def test_memory_store_success(
-        self, mock_daemon_client, mock_store, mock_validation_loop
-    ):
+    def test_memory_store_success(self, mock_daemon_client, mock_store, mock_validation_loop):
         """Test successful memory storage."""
         from theo.tools.memory_tools import MemoryTools
 
@@ -416,9 +438,7 @@ class TestMemoryTools:
         assert result["data"]["memory_type"] == "preference"
         assert result["data"]["namespace"] == "global"
 
-    def test_memory_recall_success(
-        self, mock_daemon_client, mock_store, mock_validation_loop
-    ):
+    def test_memory_recall_success(self, mock_daemon_client, mock_store, mock_validation_loop):
         """Test successful memory recall."""
         from theo.tools.memory_tools import MemoryTools
 
@@ -450,9 +470,7 @@ class TestMemoryTools:
         assert result["data"]["total"] == 1
         assert "dark mode" in result["data"]["memories"][0]["content"]
 
-    def test_memory_validate_success(
-        self, mock_daemon_client, mock_store, mock_validation_loop
-    ):
+    def test_memory_validate_success(self, mock_daemon_client, mock_store, mock_validation_loop):
         """Test successful memory validation."""
         from theo.tools.memory_tools import MemoryTools
 
@@ -481,6 +499,7 @@ class TestMemoryTools:
     ):
         """Test memory_store with relates_to parameter creates relations."""
         from unittest.mock import AsyncMock
+
         from theo.tools.memory_tools import MemoryTools
 
         mock_store.add_memory.return_value = "mem_new123"
@@ -522,8 +541,9 @@ class TestMemoryTools:
     ):
         """Test memory_store with supersedes_query auto-supersedes matching memories."""
         from unittest.mock import AsyncMock
-        from theo.tools.memory_tools import MemoryTools
+
         from theo.storage.sqlite_store import SearchResult
+        from theo.tools.memory_tools import MemoryTools
 
         mock_store.add_memory.return_value = "mem_new_correct"
 
@@ -582,8 +602,9 @@ class TestMemoryTools:
     ):
         """Test supersedes_query only supersedes memories with similarity >= 0.7."""
         from unittest.mock import AsyncMock
-        from theo.tools.memory_tools import MemoryTools
+
         from theo.storage.sqlite_store import SearchResult
+        from theo.tools.memory_tools import MemoryTools
 
         mock_store.add_memory.return_value = "mem_new123"
 
@@ -736,11 +757,11 @@ class TestMCPToolIntegration:
         mock_feedback_collector,
     ):
         """Set up MCP server with mock dependencies."""
-        from theo.tools.indexing_tools import IndexingTools
-        from theo.tools.query_tools import QueryTools
-        from theo.tools.memory_tools import MemoryTools
-        from theo.tools.management_tools import ManagementTools
         from theo.mcp_server import set_tool_instances
+        from theo.tools.indexing_tools import IndexingTools
+        from theo.tools.management_tools import ManagementTools
+        from theo.tools.memory_tools import MemoryTools
+        from theo.tools.query_tools import QueryTools
 
         indexing_tools = IndexingTools(
             daemon_client=mock_daemon_client,
@@ -775,11 +796,11 @@ class TestMCPToolIntegration:
 
     def test_full_indexing_workflow(self, configured_mcp_server, tmp_path):
         """Test full document indexing workflow through MCP tools."""
-        from theo.mcp_server import index_file, get_index_stats
-
         # Note: This test verifies the MCP tool wrappers work correctly
         # The actual functionality is tested in the unit tests above
         import asyncio
+
+        from theo.mcp_server import get_index_stats
 
         # Test get_stats works
         result = asyncio.run(get_index_stats())
@@ -787,9 +808,9 @@ class TestMCPToolIntegration:
 
     def test_full_memory_workflow(self, configured_mcp_server):
         """Test full memory workflow through MCP tools."""
-        from theo.mcp_server import memory_store, memory_recall, memory_validate
-
         import asyncio
+
+        from theo.mcp_server import memory_recall, memory_store, memory_validate
 
         # Store a memory
         store_result = asyncio.run(

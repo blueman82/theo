@@ -13,13 +13,13 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
+from theo.embedding.factory import create_embedding_provider
 from theo.embedding.ollama_provider import (
-    OllamaProvider,
     EmbeddingError,
+    OllamaProvider,
     retry_with_backoff,
 )
 from theo.embedding.provider import EmbeddingProvider
-from theo.embedding.factory import create_embedding_provider
 
 
 class TestRetryDecorator:
@@ -70,9 +70,7 @@ class TestRetryDecorator:
                 "success",
             ]
         )
-        decorated = retry_with_backoff(max_retries=3, base_delay=0.1, max_delay=1.0)(
-            mock_func
-        )
+        decorated = retry_with_backoff(max_retries=3, base_delay=0.1, max_delay=1.0)(mock_func)
 
         start_time = time.time()
         result = decorated()
@@ -101,9 +99,7 @@ class TestOllamaProvider:
 
     def test_init_custom_params(self):
         """Test initialization with custom parameters."""
-        provider = OllamaProvider(
-            host="http://custom-host:8080", model="custom-model", timeout=60
-        )
+        provider = OllamaProvider(host="http://custom-host:8080", model="custom-model", timeout=60)
 
         assert provider.host == "http://custom-host:8080"
         assert provider.model == "custom-model"
@@ -458,6 +454,7 @@ class TestEmbeddingProviderProtocol:
 
     def test_protocol_runtime_checkable(self):
         """Test EmbeddingProvider protocol is runtime checkable."""
+
         # Create a class that implements the protocol
         class CustomProvider:
             def embed_texts(self, texts: list[str]) -> list[list[float]]:
@@ -477,9 +474,11 @@ class TestEmbeddingProviderProtocol:
 
     def test_non_compliant_class_fails_protocol(self):
         """Test that non-compliant class fails isinstance check."""
+
         class NonCompliant:
             def embed_query(self, text: str) -> list[float]:
                 return [0.1, 0.2]
+
             # Missing embed_texts, health_check, close
 
         non_compliant = NonCompliant()
@@ -535,6 +534,7 @@ class TestMLXProvider:
         # Import lazily as it may not be available
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider()
             assert provider.model == "mlx-community/mxbai-embed-large-v1"
             assert provider._model_instance is None  # Lazy loading
@@ -546,6 +546,7 @@ class TestMLXProvider:
         """Test MLXProvider with custom model."""
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider(model="custom-model")
             assert provider.model == "custom-model"
             assert provider._is_mxbai is False  # custom-model doesn't contain "mxbai"
@@ -556,6 +557,7 @@ class TestMLXProvider:
         """Test MLXProvider raises ValueError for empty text."""
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider()
             with pytest.raises(ValueError, match="Text cannot be empty"):
                 provider.embed_query("")
@@ -566,6 +568,7 @@ class TestMLXProvider:
         """Test MLXProvider raises ValueError for empty texts list."""
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider()
             with pytest.raises(ValueError, match="Texts list cannot be empty"):
                 provider.embed_texts([])
@@ -576,6 +579,7 @@ class TestMLXProvider:
         """Test MLXProvider health_check when mlx is not available."""
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider()
             # health_check should return True/False without raising
             result = provider.health_check()
@@ -587,6 +591,7 @@ class TestMLXProvider:
         """Test MLXProvider close is idempotent."""
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider()
             # Should not raise even when called multiple times
             provider.close()
@@ -598,6 +603,7 @@ class TestMLXProvider:
         """Test MLXProvider implements EmbeddingProvider protocol."""
         try:
             from theo.embedding.mlx_provider import MLXProvider
+
             provider = MLXProvider()
             assert isinstance(provider, EmbeddingProvider)
         except ImportError:

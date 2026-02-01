@@ -25,7 +25,6 @@ from theo.storage import SQLiteStore
 from theo.tools import IndexingTools, ManagementTools, MemoryTools, QueryTools
 from theo.validation import FeedbackCollector, ValidationLoop
 
-
 # =============================================================================
 # Fixtures
 # =============================================================================
@@ -79,9 +78,11 @@ def mock_daemon_client() -> MagicMock:
 
     client.embed = MagicMock(side_effect=mock_embed)
     client.send = MagicMock(
-        side_effect=lambda cmd, **kwargs: mock_search(kwargs.get("query", ""))
-        if cmd == "search"
-        else {"success": False, "error": f"Unknown: {cmd}"}
+        side_effect=lambda cmd, **kwargs: (
+            mock_search(kwargs.get("query", ""))
+            if cmd == "search"
+            else {"success": False, "error": f"Unknown: {cmd}"}
+        )
     )
 
     return client

@@ -70,9 +70,7 @@ class TestStreamingTranscriber:
         """Mock model.generate_streaming() to yield StreamingResult-like objects."""
 
         class MockStreamingResult:
-            def __init__(
-                self, text: str, start: float, end: float, is_final: bool
-            ) -> None:
+            def __init__(self, text: str, start: float, end: float, is_final: bool) -> None:
                 self.text = text
                 self.start_time = start
                 self.end_time = end

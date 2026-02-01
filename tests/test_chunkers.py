@@ -18,7 +18,6 @@ from theo.chunking import (
     TextChunker,
 )
 
-
 # =============================================================================
 # Chunk Dataclass Tests
 # =============================================================================
@@ -284,7 +283,9 @@ class TestSplitOversizedChunk:
     def test_split_at_paragraph_boundaries(self):
         """Test that oversized chunks are split at paragraph boundaries."""
         chunker = ConcreteChunker()
-        content = "First paragraph content.\n\nSecond paragraph content.\n\nThird paragraph content."
+        content = (
+            "First paragraph content.\n\nSecond paragraph content.\n\nThird paragraph content."
+        )
         chunk = Chunk(
             text=content,
             metadata={},
@@ -387,8 +388,7 @@ It has multiple lines of content."""
 
         assert len(chunks) == 1
         assert (
-            chunks[0].text
-            == "This is the introduction section.\nIt has multiple lines of content."
+            chunks[0].text == "This is the introduction section.\nIt has multiple lines of content."
         )
         assert chunks[0].source_file == "/docs/readme.md"
         assert chunks[0].chunk_index == 0
@@ -442,10 +442,7 @@ Content of subsection 1.2.1."""
         assert chunks[0].metadata["header_path"] == "Chapter 1"
         assert chunks[1].metadata["header_path"] == "Chapter 1 > Section 1.1"
         assert chunks[2].metadata["header_path"] == "Chapter 1 > Section 1.2"
-        assert (
-            chunks[3].metadata["header_path"]
-            == "Chapter 1 > Section 1.2 > Subsection 1.2.1"
-        )
+        assert chunks[3].metadata["header_path"] == "Chapter 1 > Section 1.2 > Subsection 1.2.1"
 
     def test_chunk_no_headers(self):
         """Test chunking plain text without headers."""

@@ -152,15 +152,11 @@ class TestMemoryDocumentMethods:
         )
         assert doc1.can_be_promoted() is True
 
-        doc2 = MemoryDocument(
-            id="t2", content="c", memory_type=MemoryType.DECISION, confidence=0.9
-        )
+        doc2 = MemoryDocument(id="t2", content="c", memory_type=MemoryType.DECISION, confidence=0.9)
         assert doc2.can_be_promoted() is True
 
         # Non-promotable type
-        doc3 = MemoryDocument(
-            id="t3", content="c", memory_type=MemoryType.SESSION, confidence=0.9
-        )
+        doc3 = MemoryDocument(id="t3", content="c", memory_type=MemoryType.SESSION, confidence=0.9)
         assert doc3.can_be_promoted() is False
 
         # Low confidence

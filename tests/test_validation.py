@@ -12,6 +12,11 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from theo.constants import (
+    FAILURE_MULTIPLIER,
+    LOW_CONFIDENCE_THRESHOLD,
+    SUCCESS_ADJUSTMENT,
+)
 from theo.validation import (
     FeedbackCollector,
     GoldenRules,
@@ -24,11 +29,6 @@ from theo.validation.feedback import (
 )
 from theo.validation.golden_rules import (
     DEMOTION_FAILURE_THRESHOLD,
-)
-from theo.constants import (
-    FAILURE_MULTIPLIER,
-    SUCCESS_ADJUSTMENT,
-    LOW_CONFIDENCE_THRESHOLD,
 )
 
 # ============================================================================
@@ -130,9 +130,7 @@ class TestValidationLoop:
 
         result = await validation_loop.record_usage("doc_123", was_helpful=False)
 
-        expected_new_confidence = (
-            0.5 - SUCCESS_ADJUSTMENT * FAILURE_MULTIPLIER
-        )
+        expected_new_confidence = 0.5 - SUCCESS_ADJUSTMENT * FAILURE_MULTIPLIER
         assert result.success is True
         assert result.new_confidence == expected_new_confidence
         assert result.was_helpful is False
@@ -309,10 +307,7 @@ class TestFeedbackCollector:
 
     def test_collect_many_feedbacks(self, feedback_collector):
         """Should add multiple feedbacks at once."""
-        feedbacks = [
-            UsageFeedback(doc_id=f"doc_{i}", was_helpful=True)
-            for i in range(5)
-        ]
+        feedbacks = [UsageFeedback(doc_id=f"doc_{i}", was_helpful=True) for i in range(5)]
 
         feedback_collector.collect_many(feedbacks)
 
@@ -341,9 +336,7 @@ class TestFeedbackCollector:
         """Should recommend flush when batch size exceeded."""
         # Collector has batch_size=10
         for i in range(15):
-            feedback_collector.collect(
-                UsageFeedback(doc_id=f"doc_{i}", was_helpful=True)
-            )
+            feedback_collector.collect(UsageFeedback(doc_id=f"doc_{i}", was_helpful=True))
 
         assert feedback_collector.should_flush() is True
 
@@ -359,9 +352,7 @@ class TestFeedbackCollector:
 
     def test_clear_buffer(self, feedback_collector):
         """Should clear all buffered feedback."""
-        feedbacks = [
-            UsageFeedback(doc_id=f"doc_{i}", was_helpful=True) for i in range(5)
-        ]
+        feedbacks = [UsageFeedback(doc_id=f"doc_{i}", was_helpful=True) for i in range(5)]
         feedback_collector.collect_many(feedbacks)
 
         count = feedback_collector.clear()
@@ -686,9 +677,7 @@ class TestValidationIntegration:
 
         # Collect feedback
         for _ in range(3):
-            collector.collect(
-                UsageFeedback(doc_id="doc_123", was_helpful=True)
-            )
+            collector.collect(UsageFeedback(doc_id="doc_123", was_helpful=True))
         collector.collect(UsageFeedback(doc_id="doc_123", was_helpful=False))
 
         # Aggregate
@@ -700,8 +689,7 @@ class TestValidationIntegration:
         # Apply to validation loop (helpful majority)
         result = await loop.record_usage(
             "doc_123",
-            was_helpful=aggregated["doc_123"].helpful_count
-            > aggregated["doc_123"].unhelpful_count,
+            was_helpful=aggregated["doc_123"].helpful_count > aggregated["doc_123"].unhelpful_count,
         )
 
         assert result.success is True

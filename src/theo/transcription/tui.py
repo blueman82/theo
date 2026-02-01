@@ -335,9 +335,7 @@ class TranscriptionTUI:
                 memory_id = loop.run_until_complete(
                     self._storage.save_session(self._session, self._namespace)
                 )
-                self._message = (
-                    f"Memorized: {self._session.id[:8]}... → memory: {memory_id[:8]}..."
-                )
+                self._message = f"Memorized: {self._session.id[:8]}... → memory: {memory_id[:8]}..."
             finally:
                 loop.close()
         except Exception as e:
