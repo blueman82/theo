@@ -724,6 +724,39 @@ async def memory_analyze_health(
     )
 
 
+@mcp.tool()
+async def memory_backfill_edges(
+    namespace: Optional[str] = None,
+    batch_size: int = 50,
+    max_memories: int = 500,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Backfill edges for orphan memories (memories with no graph connections).
+
+    Finds memories that have no edges and runs relationship inference to connect
+    them to similar memories. Use to repair the knowledge graph after importing
+    memories or if relationship inference was previously disabled.
+
+    Args:
+        namespace: Limit to specific namespace (optional)
+        batch_size: Process this many memories per batch (default: 50)
+        max_memories: Maximum total memories to process (default: 500)
+        dry_run: If True, only count orphans without creating edges (default: False)
+
+    Returns:
+        Dictionary with orphan count, processed count, edges created
+    """
+    if memory_tools is None:
+        return {"success": False, "error": "Server not initialized"}
+
+    return await memory_tools.memory_backfill_edges(
+        namespace=namespace,
+        batch_size=batch_size,
+        max_memories=max_memories,
+        dry_run=dry_run,
+    )
+
+
 # ==============================================================================
 # Management Tools
 # ==============================================================================
