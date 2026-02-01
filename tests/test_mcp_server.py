@@ -498,16 +498,17 @@ class TestMemoryTools:
         self, mock_daemon_client, mock_store, mock_validation_loop
     ):
         """Test memory_store with relates_to parameter creates relations."""
-        from unittest.mock import AsyncMock
+        from unittest.mock import AsyncMock, MagicMock
 
         from theo.tools.memory_tools import MemoryTools
 
         mock_store.add_memory.return_value = "mem_new123"
 
         # Create a mock hybrid store for relations
-        mock_hybrid = AsyncMock()
+        # Use MagicMock as base since add_edge is sync, but set async methods explicitly
+        mock_hybrid = MagicMock()
         mock_hybrid.get_memory = AsyncMock(return_value={"id": "mem_target", "importance": 0.5})
-        mock_hybrid.add_edge.return_value = "edge_123"
+        mock_hybrid.add_edge.return_value = "edge_123"  # sync method
         mock_hybrid.update_memory = AsyncMock()
 
         tools = MemoryTools(
