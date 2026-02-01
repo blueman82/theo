@@ -545,6 +545,56 @@ class HybridStore:
 
         return memories
 
+    def find_orphan_memories(
+        self,
+        namespace: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[dict[str, Any]]:
+        """Find memories with no edges (neither source nor target).
+
+        Args:
+            namespace: Optional namespace filter
+            limit: Maximum number of results
+            offset: Offset for pagination
+
+        Returns:
+            List of orphan memory dicts
+        """
+        results = self._sqlite.find_orphan_memories(
+            namespace=namespace,
+            limit=limit,
+            offset=offset,
+        )
+
+        # Convert to HybridStore format
+        memories = []
+        for r in results:
+            memories.append(
+                {
+                    "id": r["id"],
+                    "content": r["content"],
+                    "type": r["memory_type"],
+                    "namespace": r["namespace"],
+                    "importance": r["importance"],
+                    "confidence": r["confidence"],
+                    "created_at": r.get("created_at"),
+                }
+            )
+
+        return memories
+
+    def count_orphan_memories(self, namespace: str | None = None) -> int:
+        """Count memories with no edges.
+
+        Args:
+            namespace: Optional namespace filter
+
+        Returns:
+            Number of orphan memories
+        """
+        return self._sqlite.count_orphan_memories(namespace=namespace)
+
     def get_edges(
         self,
         memory_id: str,
