@@ -21,11 +21,16 @@ with ValidationLoop for confidence scoring.
 """
 
 import hashlib
+import json
 import logging
+import re
 import uuid
 from collections import deque
 from typing import Any, Optional
 
+import httpx
+
+from theo.config import TheoSettings
 from theo.daemon import DaemonClient
 from theo.storage.hybrid import HybridStore
 from theo.storage.sqlite_store import SQLiteStore
