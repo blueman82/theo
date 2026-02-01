@@ -2,6 +2,17 @@
 
 All notable changes to Theo will be documented in this file.
 
+## [0.7.1] - 2026-02-01
+
+### Fixed
+- Fixed flaky `test_multiple_clients_concurrent` test with proper server readiness check
+- Fixed async mock warnings in test_mcp_server.py (use MagicMock for sync methods)
+- Fixed ruff line length violations in relationship classification prompt
+
+### Changed
+- Registered `timeout` and `xdist_group` pytest markers in pyproject.toml
+- Test suite now passes with 412 tests, 0 skipped (previously 1 skipped)
+
 ## [0.7.0] - 2026-02-01
 
 ### Changed
