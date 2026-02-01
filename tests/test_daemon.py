@@ -652,15 +652,16 @@ class TestQuickEmbed:
     """Test quick_embed convenience function."""
 
     def test_quick_embed_fallback(self):
-        """Test quick_embed with fallback."""
-        from theo.daemon.client import quick_embed
-
-        # Patch where it's imported
-        with patch("theo.embedding.create_embedding_provider") as mock_create:
+        """Test quick_embed with fallback (when daemon not running)."""
+        # The quick_embed function imports create_embedding_provider inside the
+        # _do_fallback method, so patch needs to be on theo.embedding module
+        with patch("theo.embedding.factory.create_embedding_provider") as mock_create:
             mock_provider = Mock()
             mock_provider.embed_texts = Mock(return_value=[[0.1, 0.2]])
             mock_provider.close = Mock()
             mock_create.return_value = mock_provider
+
+            from theo.daemon.client import quick_embed
 
             embeddings = quick_embed(["hello"])
 
