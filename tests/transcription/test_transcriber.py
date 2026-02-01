@@ -193,6 +193,13 @@ class TestStreamingTranscriber:
 
     def test_transcriber_context_manager(self) -> None:
         """Verify context manager calls close() on exit."""
+        mock_model = MagicMock(name="mock_model")
+        mock_model._processor = MagicMock()  # Simulate processor exists
+        mock_load = MagicMock(return_value=mock_model)
+
+        mock_mlx_audio_stt_generate = MagicMock()
+        mock_mlx_audio_stt_generate.load_model = mock_load
+
         with patch.dict(
             "sys.modules",
             {
@@ -200,12 +207,13 @@ class TestStreamingTranscriber:
                 "mlx.core": MagicMock(),
                 "mlx_audio": MagicMock(),
                 "mlx_audio.stt": MagicMock(),
+                "mlx_audio.stt.generate": mock_mlx_audio_stt_generate,
             },
         ):
             from theo.transcription.transcriber import StreamingTranscriber
 
             with StreamingTranscriber() as transcriber:
-                transcriber._model = MagicMock(name="loaded_model")
+                pass  # __enter__ loads model via _ensure_model
 
             # Model should be None after context exit
             assert transcriber._model is None
