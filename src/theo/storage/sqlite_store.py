@@ -729,90 +729,43 @@ class SQLiteStore:
         except Exception as e:
             raise SQLiteStoreError(f"Failed to count edges: {e}") from e
 
+    def _orphan_where_clause(self, namespace: str | None) -> tuple[str, tuple[str, ...] | tuple[()]]:
+        """Build WHERE clause for orphan memory queries (DRY helper)."""
+        base = """m.id NOT IN (SELECT source_id FROM edges)
+            AND m.id NOT IN (SELECT target_id FROM edges)"""
+        if namespace:
+            return f"m.namespace = ? AND {base}", (namespace,)
+        return base, ()
+
     def find_orphan_memories(
         self,
         namespace: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[dict[str, Any]]:
-        """Find memories with no edges (neither source nor target).
-
-        Args:
-            namespace: Optional namespace filter
-            limit: Maximum number of results
-            offset: Offset for pagination
-
-        Returns:
-            List of orphan memory dicts
-        """
+        """Find memories with no edges (neither source nor target)."""
         try:
             cursor = self._conn.cursor()
-
-            # Find memories that are not in edges table (as source or target)
-            if namespace:
-                cursor.execute(
-                    """
-                    SELECT m.* FROM memories m
-                    WHERE m.namespace = ?
-                    AND m.id NOT IN (SELECT source_id FROM edges)
-                    AND m.id NOT IN (SELECT target_id FROM edges)
+            where, params = self._orphan_where_clause(namespace)
+            cursor.execute(
+                f"""SELECT m.* FROM memories m
+                    WHERE {where}
                     ORDER BY m.created_at DESC
-                    LIMIT ? OFFSET ?
-                    """,
-                    (namespace, limit, offset),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT m.* FROM memories m
-                    WHERE m.id NOT IN (SELECT source_id FROM edges)
-                    AND m.id NOT IN (SELECT target_id FROM edges)
-                    ORDER BY m.created_at DESC
-                    LIMIT ? OFFSET ?
-                    """,
-                    (limit, offset),
-                )
-
-            rows = cursor.fetchall()
-            return [self._row_to_memory(row) for row in rows]
-
+                    LIMIT ? OFFSET ?""",
+                (*params, limit, offset),
+            )
+            return [self._row_to_memory(row) for row in cursor.fetchall()]
         except Exception as e:
             raise SQLiteStoreError(f"Failed to find orphan memories: {e}") from e
 
     def count_orphan_memories(self, namespace: str | None = None) -> int:
-        """Count memories with no edges.
-
-        Args:
-            namespace: Optional namespace filter
-
-        Returns:
-            Number of orphan memories
-        """
+        """Count memories with no edges."""
         try:
             cursor = self._conn.cursor()
-
-            if namespace:
-                cursor.execute(
-                    """
-                    SELECT COUNT(*) FROM memories m
-                    WHERE m.namespace = ?
-                    AND m.id NOT IN (SELECT source_id FROM edges)
-                    AND m.id NOT IN (SELECT target_id FROM edges)
-                    """,
-                    (namespace,),
-                )
-            else:
-                cursor.execute(
-                    """
-                    SELECT COUNT(*) FROM memories m
-                    WHERE m.id NOT IN (SELECT source_id FROM edges)
-                    AND m.id NOT IN (SELECT target_id FROM edges)
-                    """
-                )
-
+            where, params = self._orphan_where_clause(namespace)
+            cursor.execute(f"SELECT COUNT(*) FROM memories m WHERE {where}", params)
             result = cursor.fetchone()
             return result[0] if result else 0
-
         except Exception as e:
             raise SQLiteStoreError(f"Failed to count orphan memories: {e}") from e
 
