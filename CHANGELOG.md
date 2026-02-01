@@ -2,6 +2,25 @@
 
 All notable changes to Theo will be documented in this file.
 
+## [0.7.0] - 2026-02-01
+
+### Changed
+- **API Consolidation**: Reduced MCP tools from 13 to 10 memory tools
+- `memory_outcome` now accepts `skip_event=True` for direct confidence adjustment (replaces `memory_validate`)
+- `memory_analyze_health` now properly implements `include_contradictions` parameter
+
+### Removed
+- `memory_validate` - use `memory_outcome(skip_event=True)` instead
+- `memory_detect_contradictions` - use `memory_analyze_health(include_contradictions=True)` instead
+- `memory_check_supersedes` - use `memory_store(supersedes_query=...)` instead
+
+### Fixed
+- `memory_analyze_health(include_contradictions=True)` now actually detects contradictions (was returning empty list)
+
+### Documentation
+- Updated README tool counts (27 → 22 total, 16 → 13 memory tools)
+- Updated `/contradictions` skill to use new API
+
 ## [0.3.0] - 2026-01-29
 
 ### Added
