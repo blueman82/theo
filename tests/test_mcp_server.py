@@ -541,7 +541,7 @@ class TestMemoryTools:
         self, mock_daemon_client, mock_store, mock_validation_loop
     ):
         """Test memory_store with supersedes_query auto-supersedes matching memories."""
-        from unittest.mock import AsyncMock
+        from unittest.mock import AsyncMock, MagicMock
 
         from theo.storage.sqlite_store import SearchResult
         from theo.tools.memory_tools import MemoryTools
@@ -563,9 +563,10 @@ class TestMemoryTools:
         mock_store.search_hybrid.return_value = [mock_result]
 
         # Create a mock hybrid store for relations
-        mock_hybrid = AsyncMock()
+        # Use MagicMock as base since add_edge is sync, but set async methods explicitly
+        mock_hybrid = MagicMock()
         mock_hybrid.get_memory = AsyncMock(return_value={"id": "mem_old_wrong", "importance": 0.6})
-        mock_hybrid.add_edge.return_value = "edge_supersede_123"
+        mock_hybrid.add_edge.return_value = "edge_supersede_123"  # sync method
         mock_hybrid.update_memory = AsyncMock()
 
         tools = MemoryTools(
