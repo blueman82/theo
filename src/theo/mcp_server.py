@@ -9,7 +9,7 @@ The server exposes tools for:
 - Memory operations (memory_store, memory_recall, memory_forget, memory_context)
 - TRY/LEARN cycle (memory_apply, memory_outcome)
 - Graph operations (memory_relate, memory_edge_forget, memory_inspect_graph)
-- Inspection (memory_count, memory_list, validation_history, memory_analyze_health)
+- Inspection (memory_count, memory_list, validation_history, memory_analyze_health, memory_backfill_edges)
 - Collection management (delete_chunks, delete_file, clear_index, get_stats)
 
 Architectural justification:
