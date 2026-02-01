@@ -154,6 +154,7 @@ class MemoryTools:
         importance: float = 0.5,
         metadata: Optional[dict[str, Any]] = None,
         relates_to: Optional[list[dict[str, Any]]] = None,
+        supersedes_query: Optional[str] = None,
     ) -> dict[str, Any]:
         """Store a new memory with semantic indexing.
 
@@ -175,11 +176,15 @@ class MemoryTools:
                 Valid relations: relates_to, supersedes, caused_by, contradicts.
                 Optional 'weight' key (default: 1.0).
                 Example: [{"target_id": "mem_abc", "relation": "relates_to"}]
+            supersedes_query: Optional query to find and auto-supersede matching
+                memories. Memories with similarity >= 0.7 will be superseded
+                (importance halved, confidence set to 0.1).
 
         Returns:
             Dictionary with:
             - success: Boolean indicating operation success
-            - data: Dictionary with id, content_hash, namespace, duplicate, relations
+            - data: Dictionary with id, content_hash, namespace, duplicate, relations,
+                    superseded (list of auto-superseded memory IDs)
             - error: Error message if operation failed
         """
         try:
@@ -246,6 +251,26 @@ class MemoryTools:
                             f"Must be one of: {valid_relations}",
                         }
 
+            # Handle supersedes_query - auto-populate relates_to with supersedes relations
+            auto_supersedes: list[dict[str, Any]] = []
+            if (query := supersedes_query) and query.strip():
+                search_result = await self.memory_recall(
+                    query=query,
+                    n_results=10,
+                    namespace=namespace,
+                    include_related=False,
+                )
+                if search_result.get("success"):
+                    auto_supersedes = [
+                        {"target_id": mem["id"], "relation": "supersedes"}
+                        for mem in search_result.get("data", {}).get("memories", [])
+                        if mem.get("similarity", 0) >= 0.7
+                    ]
+
+            # Merge auto_supersedes into relates_to
+            if auto_supersedes:
+                relates_to = auto_supersedes if relates_to is None else relates_to + auto_supersedes
+
             # Compute content hash for deduplication
             content_hash = self._compute_hash(content)
 
@@ -303,8 +328,11 @@ class MemoryTools:
                         rel_type = RelationType(relation)
                         if rel_type == RelationType.SUPERSEDES:
                             current_importance = target_memory.get("importance", 0.5)
-                            new_importance = current_importance * 0.5
-                            await self._hybrid.update_memory(target_id, importance=new_importance)
+                            await self._hybrid.update_memory(
+                                target_id,
+                                importance=current_importance * 0.5,
+                                confidence=0.1,  # Floor confidence for superseded memories
+                            )
 
                         # Create the edge
                         edge_id = self._hybrid.add_edge(
@@ -323,6 +351,9 @@ class MemoryTools:
                     except Exception as e:
                         relation_errors.append(f"Failed to create relation to '{target_id}': {e}")
 
+            # Extract auto-superseded IDs for return value
+            superseded_ids = [rel["target_id"] for rel in auto_supersedes]
+
             result_data: dict[str, Any] = {
                 "id": memory_id,
                 "content_hash": content_hash,
@@ -330,6 +361,8 @@ class MemoryTools:
                 "memory_type": mem_type.value,
                 "importance": importance,
                 "duplicate": False,
+                "superseded": superseded_ids,
+                "superseded_count": len(superseded_ids),
             }
 
             if created_relations:

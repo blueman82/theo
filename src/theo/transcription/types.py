@@ -15,6 +15,64 @@ from theo.types import MemoryDocument, MemoryType
 
 
 @dataclass(frozen=True)
+class TranscriptionRecord:
+    """Immutable transcription record from SQLite storage.
+
+    Represents a complete transcription with optional audio file path.
+
+    Attributes:
+        id: Unique transcription identifier
+        full_text: Complete transcribed text
+        audio_path: Path to saved audio file (None if not saved)
+        duration_seconds: Recording duration in seconds
+        model_used: Whisper model identifier
+        language: Detected or specified language code
+        namespace: Storage namespace
+        memory_id: Optional linked memory ID
+        created_at: Unix timestamp of creation
+        segments: List of segment dicts with timing info
+    """
+
+    id: str
+    full_text: str
+    audio_path: str | None = None
+    duration_seconds: float | None = None
+    model_used: str | None = None
+    language: str | None = None
+    namespace: str = "default"
+    memory_id: str | None = None
+    created_at: float = 0.0
+    segments: tuple[dict[str, Any], ...] = ()
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "TranscriptionRecord":
+        """Create TranscriptionRecord from SQLite row dict.
+
+        Args:
+            data: Dict with transcription fields
+
+        Returns:
+            TranscriptionRecord instance
+        """
+        segments = data.get("segments", [])
+        # Convert list to tuple for immutability
+        segments_tuple = tuple(segments) if segments else ()
+
+        return cls(
+            id=data["id"],
+            full_text=data["full_text"],
+            audio_path=data.get("audio_path"),
+            duration_seconds=data.get("duration_seconds"),
+            model_used=data.get("model_used"),
+            language=data.get("language"),
+            namespace=data.get("namespace", "default"),
+            memory_id=data.get("memory_id"),
+            created_at=data.get("created_at", 0.0),
+            segments=segments_tuple,
+        )
+
+
+@dataclass(frozen=True)
 class AudioChunk:
     """Immutable audio chunk for processing.
 

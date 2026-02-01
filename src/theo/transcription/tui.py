@@ -1,7 +1,7 @@
 """Terminal UI for real-time transcription.
 
 Simple ANSI-based TUI for voice transcription.
-Keyboard controls: SPACE to start/stop, S to save, Q to quit.
+Keyboard controls: SPACE to start/stop, S to save, P play TTS, R replay, V voice, Q quit.
 """
 
 import asyncio
@@ -13,10 +13,12 @@ import termios
 import textwrap
 import tty
 from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 
 from theo.storage.hybrid import HybridStore
+from theo.transcription import audio_storage, tts
 from theo.transcription.audio import AudioCapture
 from theo.transcription.storage import TranscriptionStorage
 from theo.transcription.transcriber import StreamingTranscriber
@@ -29,6 +31,7 @@ CLEAR_SCREEN = "\033[2J\033[H"
 BOLD = "\033[1m"
 DIM = "\033[2m"
 GREEN = "\033[32m"
+YELLOW = "\033[33m"
 RESET = "\033[0m"
 
 
@@ -36,7 +39,7 @@ class TranscriptionTUI:
     """Terminal UI for real-time voice transcription.
 
     Simple ANSI-based display with keyboard controls for
-    starting/stopping recording, saving sessions, and quitting.
+    starting/stopping recording, saving sessions, playback, and quitting.
     """
 
     def __init__(
@@ -49,9 +52,13 @@ class TranscriptionTUI:
         initial_prompt: str | None = None,
         batch_mode: bool = False,
         temperature: float = 0.0,
+        tts_voice: str = "tara",
+        tts_url: str = "http://localhost:5005/v1/audio/speech",
     ) -> None:
         self._namespace = namespace
         self._batch_mode = batch_mode
+        self._model_path = model_path
+        self._language = language
         self._audio = AudioCapture(device=device)
         self._transcriber = StreamingTranscriber(
             model_path=model_path,
@@ -68,6 +75,12 @@ class TranscriptionTUI:
         self._recording = False
         self._audio_buffer: list[np.ndarray] = []
         self._message: str = ""
+
+        # TTS and playback state
+        self._tts_voice = tts_voice
+        self._tts_url = tts_url
+        self._last_saved_id: str | None = None
+        self._last_audio_path: Path | None = None
 
     def run(self) -> None:
         """Run the TUI main loop."""
@@ -108,6 +121,14 @@ class TranscriptionTUI:
             self._toggle_recording()
         elif key.lower() == "s":
             self._save_session()
+        elif key.lower() == "m":
+            self._memorize_session()
+        elif key.lower() == "p":
+            self._play_tts()
+        elif key.lower() == "r":
+            self._replay_original()
+        elif key.lower() == "v":
+            self._cycle_voice()
         elif key.lower() == "q":
             return False
         return True
@@ -145,11 +166,18 @@ class TranscriptionTUI:
             status += f" | Mic: {mic}"
         lines.append(f"{BOLD}{status}{RESET}")
 
+        # Voice indicator
+        lines.append(f"{YELLOW}Voice: {self._tts_voice}{RESET}")
+
         if self._message:
             lines.append(f"{GREEN}{self._message}{RESET}")
 
         lines.append("")
-        lines.append(f"{DIM}Controls: [SPACE] Start/Stop | [S] Save | [Q] Quit{RESET}")
+        controls = (
+            "[SPACE] Start/Stop | [S] Save | [M] Memorize | "
+            "[P] Play TTS | [R] Replay | [V] Voice | [Q] Quit"
+        )
+        lines.append(f"{DIM}Controls: {controls}{RESET}")
 
         output = CLEAR_SCREEN + "\r\n".join(lines)
         sys.stdout.write(output)
@@ -167,6 +195,8 @@ class TranscriptionTUI:
             self._segments = []
             self._audio_buffer = []
             self._message = ""
+            self._last_saved_id = None
+            self._last_audio_path = None
             try:
                 self._audio.start()
                 self._recording = True
@@ -185,7 +215,7 @@ class TranscriptionTUI:
                 self._segments.append(segment)
                 if self._session:
                     self._session.add_segment(segment)
-                self._audio_buffer = []
+                # Keep audio buffer for save, don't clear here
                 self._message = "Transcription complete"
 
     def _process_audio(self) -> None:
@@ -212,9 +242,54 @@ class TranscriptionTUI:
             logger.exception("Transcription error: %s", e)
 
     def _save_session(self) -> None:
-        """Save current session to Theo storage."""
+        """Save current session as transcription only (source, no memory)."""
         if not self._session:
             self._message = "No session to save"
+            return
+        if not self._storage:
+            self._message = "Storage not configured"
+            return
+        if self._last_saved_id == self._session.id:
+            self._message = "Already saved"
+            return
+        if self._recording:
+            self._toggle_recording()
+
+        try:
+            # Combine audio buffer into single array
+            audio_data: np.ndarray | None = None
+            if self._audio_buffer:
+                audio_data = np.concatenate(self._audio_buffer)
+
+            # Save to SQLite with audio file (transcription only, no memory)
+            transcription_id = self._storage.save_session_to_db(
+                session=self._session,
+                audio_data=audio_data,
+                namespace=self._namespace,
+                model_used=self._model_path,
+                language=self._language,
+            )
+            self._last_saved_id = transcription_id
+
+            # Track audio path for replay
+            if audio_data is not None:
+                self._last_audio_path = audio_storage.get_audio_path(self._session.id)
+            else:
+                self._last_audio_path = None
+
+            self._message = f"Saved: {transcription_id[:8]}... (source only)"
+
+            # Clear audio buffer after save
+            self._audio_buffer = []
+
+        except Exception as e:
+            self._message = f"Save failed: {e}"
+            logger.exception("Save error: %s", e)
+
+    def _memorize_session(self) -> None:
+        """Save current session as transcription AND memory (source + knowledge)."""
+        if not self._session:
+            self._message = "No session to memorize"
             return
         if not self._storage:
             self._message = "Storage not configured"
@@ -222,15 +297,104 @@ class TranscriptionTUI:
         if self._recording:
             self._toggle_recording()
 
+        # First save the transcription if not already saved
+        already_saved = self._last_saved_id == self._session.id
+        if not already_saved:
+            try:
+                audio_data: np.ndarray | None = None
+                if self._audio_buffer:
+                    audio_data = np.concatenate(self._audio_buffer)
+
+                transcription_id = self._storage.save_session_to_db(
+                    session=self._session,
+                    audio_data=audio_data,
+                    namespace=self._namespace,
+                    model_used=self._model_path,
+                    language=self._language,
+                )
+                self._last_saved_id = transcription_id
+
+                if audio_data is not None:
+                    self._last_audio_path = audio_storage.get_audio_path(self._session.id)
+                else:
+                    self._last_audio_path = None
+
+                self._audio_buffer = []
+            except Exception as e:
+                self._message = f"Save failed: {e}"
+                logger.exception("Save error: %s", e)
+                return
+
+        # Now create memory with provenance link
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
+                # Add source_transcription to metadata for provenance
+                self._session.metadata["source_transcription_id"] = self._session.id
                 memory_id = loop.run_until_complete(
                     self._storage.save_session(self._session, self._namespace)
                 )
-                self._message = f"Saved: {memory_id[:8]}..."
+                self._message = (
+                    f"Memorized: {self._session.id[:8]}... → memory: {memory_id[:8]}..."
+                )
             finally:
                 loop.close()
         except Exception as e:
-            self._message = f"Save failed: {e}"
+            self._message = f"Memorize failed: {e}"
+            logger.exception("Memorize error: %s", e)
+
+    def _play_tts(self) -> None:
+        """Play current transcription text via TTS."""
+        if not self._segments:
+            self._message = "No transcription to play"
+            return
+        if self._recording:
+            self._message = "Stop recording first"
+            return
+
+        text_parts = [s.text for s in self._segments if s.is_final]
+        full_text = " ".join(text_parts)
+        if not full_text.strip():
+            self._message = "No text to play"
+            return
+
+        self._message = f"Playing TTS ({self._tts_voice})..."
+        self._draw()
+
+        try:
+            tts.speak(full_text, voice=self._tts_voice, tts_url=self._tts_url)
+            self._message = "TTS playback complete"
+        except Exception as e:
+            self._message = f"TTS error: {e}"
+            logger.exception("TTS error: %s", e)
+
+    def _replay_original(self) -> None:
+        """Replay original recorded audio."""
+        if self._recording:
+            self._message = "Stop recording first"
+            return
+
+        # Check if we have a recently saved audio path
+        if self._last_audio_path and self._last_audio_path.exists():
+            self._message = "Replaying original audio..."
+            self._draw()
+            try:
+                audio_storage.play_audio_file(self._last_audio_path)
+                self._message = "Replay complete"
+            except Exception as e:
+                self._message = f"Replay error: {e}"
+                logger.exception("Replay error: %s", e)
+            return
+
+        # Otherwise check if we have unsaved audio buffer
+        if self._audio_buffer:
+            self._message = "Save first to replay original audio"
+            return
+
+        self._message = "No audio to replay (save a session first)"
+
+    def _cycle_voice(self) -> None:
+        """Cycle through available TTS voices."""
+        self._tts_voice = tts.cycle_voice(self._tts_voice)
+        self._message = f"Voice: {self._tts_voice}"

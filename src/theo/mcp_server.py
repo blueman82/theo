@@ -216,6 +216,7 @@ async def memory_store(
     namespace: str = "global",
     importance: float = 0.5,
     metadata: Optional[dict[str, Any]] = None,
+    supersedes_query: Optional[str] = None,
 ) -> dict[str, Any]:
     """Store a new memory with semantic indexing.
 
@@ -229,11 +230,15 @@ async def memory_store(
         namespace: Scope of the memory (global, default, or project:{name})
         importance: Importance score from 0.0 to 1.0 (default: 0.5)
         metadata: Optional additional metadata
+        supersedes_query: Optional query to find and auto-supersede matching memories.
+            Memories with similarity >= 0.7 will be superseded (importance halved,
+            confidence set to 0.1). Use when correcting or replacing old information.
 
     Returns:
         Dictionary with:
         - success: Boolean indicating operation success
-        - data: Dictionary with id, content_hash, namespace, duplicate flag
+        - data: Dictionary with id, content_hash, namespace, duplicate flag,
+                superseded (list of superseded memory IDs if supersedes_query used)
         - error: Error message if operation failed
     """
     if memory_tools is None:
@@ -245,6 +250,7 @@ async def memory_store(
         namespace=namespace,
         importance=importance,
         metadata=metadata,
+        supersedes_query=supersedes_query,
     )
 
 

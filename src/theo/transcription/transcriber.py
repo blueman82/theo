@@ -68,9 +68,9 @@ class StreamingTranscriber:
         """
         if self._model is None:
             warnings.filterwarnings("ignore", message="Could not load WhisperProcessor")
-            from mlx_audio.stt import load
+            from mlx_audio.stt.generate import load_model
 
-            model = load(self._model_path)
+            model = load_model(self._model_path)
 
             # mlx-community models don't include processor - load from original
             if not hasattr(model, "_processor") or model._processor is None:

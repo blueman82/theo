@@ -69,9 +69,24 @@ class TheoSettings(BaseSettings):
     # Token budget (required)
     default_token_budget: int = Field(description="Default token budget for context generation")
 
+    # TTS configuration (optional, with defaults)
+    tts_voice: str = Field(default="tara", description="Default TTS voice for playback")
+    tts_url: str = Field(
+        default="http://localhost:5005/v1/audio/speech",
+        description="Orpheus-FastAPI TTS endpoint URL",
+    )
+    audio_path: Path = Field(
+        default=Path.home() / ".theo" / "audio",
+        description="Directory for storing audio recordings",
+    )
+
     def get_sqlite_path(self) -> Path:
         """Get the SQLite path, expanding user home."""
         return self.sqlite_path.expanduser().resolve()
+
+    def get_audio_path(self) -> Path:
+        """Get the audio storage path, expanding user home."""
+        return self.audio_path.expanduser().resolve()
 
 
 # Alias for backward compatibility with code expecting RecallSettings

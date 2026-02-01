@@ -517,6 +517,115 @@ class TestMemoryTools:
         assert result["data"]["relations"][0]["relation"] == "relates_to"
         mock_hybrid.add_edge.assert_called_once()
 
+    def test_memory_store_with_supersedes_query(
+        self, mock_daemon_client, mock_store, mock_validation_loop
+    ):
+        """Test memory_store with supersedes_query auto-supersedes matching memories."""
+        from unittest.mock import AsyncMock
+        from theo.tools.memory_tools import MemoryTools
+        from theo.storage.sqlite_store import SearchResult
+
+        mock_store.add_memory.return_value = "mem_new_correct"
+
+        # Configure mock store to return results for memory_recall (via search_hybrid)
+        mock_result = SearchResult(
+            id="mem_old_wrong",
+            content="Old incorrect information",
+            score=0.85,  # Above 0.7 threshold
+            memory_type="decision",
+            namespace="project:test",
+            confidence=0.5,
+            importance=0.6,
+            source_file=None,
+            chunk_index=0,
+        )
+        mock_store.search_hybrid.return_value = [mock_result]
+
+        # Create a mock hybrid store for relations
+        mock_hybrid = AsyncMock()
+        mock_hybrid.get_memory = AsyncMock(return_value={"id": "mem_old_wrong", "importance": 0.6})
+        mock_hybrid.add_edge.return_value = "edge_supersede_123"
+        mock_hybrid.update_memory = AsyncMock()
+
+        tools = MemoryTools(
+            daemon_client=mock_daemon_client,
+            store=mock_store,
+            validation_loop=mock_validation_loop,
+            hybrid_store=mock_hybrid,
+        )
+
+        result = asyncio.run(
+            tools.memory_store(
+                content="Correct information that replaces old",
+                memory_type="decision",
+                namespace="project:test",
+                supersedes_query="old incorrect information",
+            )
+        )
+
+        assert result["success"] is True
+        assert result["data"]["id"] == "mem_new_correct"
+        # Check that superseded list contains the old memory ID
+        assert "superseded" in result["data"]
+        assert "mem_old_wrong" in result["data"]["superseded"]
+        assert result["data"]["superseded_count"] == 1
+        # Check that the edge was created
+        mock_hybrid.add_edge.assert_called_once()
+        # Check that confidence was set to 0.1 for superseded memory
+        mock_hybrid.update_memory.assert_called_once()
+        call_args = mock_hybrid.update_memory.call_args
+        assert call_args[0][0] == "mem_old_wrong"  # First positional arg is target_id
+        assert call_args[1]["confidence"] == 0.1  # Keyword arg confidence
+
+    def test_memory_store_supersedes_query_similarity_threshold(
+        self, mock_daemon_client, mock_store, mock_validation_loop
+    ):
+        """Test supersedes_query only supersedes memories with similarity >= 0.7."""
+        from unittest.mock import AsyncMock
+        from theo.tools.memory_tools import MemoryTools
+        from theo.storage.sqlite_store import SearchResult
+
+        mock_store.add_memory.return_value = "mem_new123"
+
+        # Configure mock store to return result below threshold
+        mock_result = SearchResult(
+            id="mem_low_similarity",
+            content="Somewhat related content",
+            score=0.65,  # Below 0.7 threshold
+            memory_type="decision",
+            namespace="global",
+            confidence=0.5,
+            importance=0.5,
+            source_file=None,
+            chunk_index=0,
+        )
+        mock_store.search_hybrid.return_value = [mock_result]
+
+        mock_hybrid = AsyncMock()
+
+        tools = MemoryTools(
+            daemon_client=mock_daemon_client,
+            store=mock_store,
+            validation_loop=mock_validation_loop,
+            hybrid_store=mock_hybrid,
+        )
+
+        result = asyncio.run(
+            tools.memory_store(
+                content="New memory",
+                memory_type="decision",
+                namespace="global",
+                supersedes_query="somewhat related",
+            )
+        )
+
+        assert result["success"] is True
+        # Should not supersede anything due to low similarity
+        assert result["data"]["superseded"] == []
+        assert result["data"]["superseded_count"] == 0
+        # No edge should be created
+        mock_hybrid.add_edge.assert_not_called()
+
 
 # =============================================================================
 # ManagementTools Tests

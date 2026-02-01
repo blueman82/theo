@@ -299,7 +299,64 @@ class SQLiteStore:
         """
         )
 
-        # Record schema version 2 (sqlite-vec migration)
+        # =====================================================================
+        # Transcription Storage Tables (schema v3)
+        # =====================================================================
+
+        # Transcription sessions
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS transcriptions (
+                id TEXT PRIMARY KEY,
+                audio_path TEXT,
+                full_text TEXT NOT NULL,
+                duration_seconds REAL,
+                model_used TEXT,
+                language TEXT,
+                namespace TEXT DEFAULT 'default',
+                memory_id TEXT,
+                created_at REAL NOT NULL,
+                FOREIGN KEY(memory_id) REFERENCES memories(id)
+            )
+        """
+        )
+
+        # Transcription segments with timing
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS transcription_segments (
+                id TEXT PRIMARY KEY,
+                transcription_id TEXT NOT NULL,
+                text TEXT NOT NULL,
+                start_time REAL NOT NULL,
+                end_time REAL NOT NULL,
+                confidence REAL DEFAULT 0.8,
+                FOREIGN KEY(transcription_id) REFERENCES transcriptions(id) ON DELETE CASCADE
+            )
+        """
+        )
+
+        # Indexes for transcriptions
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_transcription_segments_parent
+            ON transcription_segments(transcription_id)
+        """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_transcriptions_namespace
+            ON transcriptions(namespace)
+        """
+        )
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_transcriptions_created
+            ON transcriptions(created_at DESC)
+        """
+        )
+
+        # Record schema versions
         cursor.execute(
             """
             INSERT OR IGNORE INTO schema_version (version, applied_at)
@@ -311,6 +368,13 @@ class SQLiteStore:
             """
             INSERT OR IGNORE INTO schema_version (version, applied_at)
             VALUES (2, ?)
+        """,
+            (time.time(),),
+        )
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO schema_version (version, applied_at)
+            VALUES (3, ?)
         """,
             (time.time(),),
         )
@@ -1544,3 +1608,255 @@ class SQLiteStore:
 
         except Exception as e:
             raise SQLiteStoreError(f"Failed to cache embedding: {e}") from e
+
+    # =========================================================================
+    # Transcription Operations
+    # =========================================================================
+
+    def save_transcription(
+        self,
+        transcription_id: str,
+        full_text: str,
+        duration_seconds: float | None = None,
+        model_used: str | None = None,
+        language: str | None = None,
+        namespace: str = "default",
+        segments: list[dict] | None = None,
+        audio_path: str | None = None,
+        memory_id: str | None = None,
+    ) -> str:
+        """Save a transcription with optional segments.
+
+        Args:
+            transcription_id: Unique ID for the transcription
+            full_text: Complete transcription text
+            duration_seconds: Recording duration in seconds
+            model_used: Whisper model identifier
+            language: Detected or specified language code
+            namespace: Storage namespace
+            segments: List of segment dicts with text, start_time, end_time, confidence
+            audio_path: Path to saved audio file
+            memory_id: Optional linked memory ID
+
+        Returns:
+            The transcription ID
+
+        Raises:
+            SQLiteStoreError: If save fails
+        """
+        try:
+            cursor = self._conn.cursor()
+            now = time.time()
+
+            # Insert transcription record
+            cursor.execute(
+                """
+                INSERT INTO transcriptions (
+                    id, audio_path, full_text, duration_seconds, model_used,
+                    language, namespace, memory_id, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    transcription_id,
+                    audio_path,
+                    full_text,
+                    duration_seconds,
+                    model_used,
+                    language,
+                    namespace,
+                    memory_id,
+                    now,
+                ),
+            )
+
+            # Insert segments if provided
+            if segments:
+                for segment in segments:
+                    segment_id = uuid4().hex
+                    cursor.execute(
+                        """
+                        INSERT INTO transcription_segments (
+                            id, transcription_id, text, start_time, end_time, confidence
+                        ) VALUES (?, ?, ?, ?, ?, ?)
+                        """,
+                        (
+                            segment_id,
+                            transcription_id,
+                            segment["text"],
+                            segment["start_time"],
+                            segment["end_time"],
+                            segment.get("confidence", 0.8),
+                        ),
+                    )
+
+            self._conn.commit()
+            return transcription_id
+
+        except Exception as e:
+            self._conn.rollback()
+            raise SQLiteStoreError(f"Failed to save transcription: {e}") from e
+
+    def get_transcription(self, transcription_id: str) -> dict | None:
+        """Get transcription by ID with all segments.
+
+        Args:
+            transcription_id: Transcription ID
+
+        Returns:
+            Transcription dict with segments, or None if not found
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            # Get transcription record
+            cursor.execute(
+                """
+                SELECT id, audio_path, full_text, duration_seconds, model_used,
+                       language, namespace, memory_id, created_at
+                FROM transcriptions
+                WHERE id = ?
+                """,
+                (transcription_id,),
+            )
+
+            row = cursor.fetchone()
+            if not row:
+                return None
+
+            transcription = {
+                "id": row["id"],
+                "audio_path": row["audio_path"],
+                "full_text": row["full_text"],
+                "duration_seconds": row["duration_seconds"],
+                "model_used": row["model_used"],
+                "language": row["language"],
+                "namespace": row["namespace"],
+                "memory_id": row["memory_id"],
+                "created_at": row["created_at"],
+            }
+
+            # Get segments
+            cursor.execute(
+                """
+                SELECT id, text, start_time, end_time, confidence
+                FROM transcription_segments
+                WHERE transcription_id = ?
+                ORDER BY start_time
+                """,
+                (transcription_id,),
+            )
+
+            transcription["segments"] = [
+                {
+                    "id": seg["id"],
+                    "text": seg["text"],
+                    "start_time": seg["start_time"],
+                    "end_time": seg["end_time"],
+                    "confidence": seg["confidence"],
+                }
+                for seg in cursor.fetchall()
+            ]
+
+            return transcription
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to get transcription: {e}") from e
+
+    def list_transcriptions(
+        self,
+        namespace: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[dict]:
+        """List transcriptions with optional namespace filter.
+
+        Args:
+            namespace: Optional namespace filter
+            limit: Maximum results to return
+            offset: Number of results to skip
+
+        Returns:
+            List of transcription dicts (without segments)
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            if namespace:
+                cursor.execute(
+                    """
+                    SELECT id, audio_path, full_text, duration_seconds, model_used,
+                           language, namespace, memory_id, created_at
+                    FROM transcriptions
+                    WHERE namespace = ?
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (namespace, limit, offset),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT id, audio_path, full_text, duration_seconds, model_used,
+                           language, namespace, memory_id, created_at
+                    FROM transcriptions
+                    ORDER BY created_at DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                )
+
+            return [
+                {
+                    "id": row["id"],
+                    "audio_path": row["audio_path"],
+                    "full_text": row["full_text"],
+                    "duration_seconds": row["duration_seconds"],
+                    "model_used": row["model_used"],
+                    "language": row["language"],
+                    "namespace": row["namespace"],
+                    "memory_id": row["memory_id"],
+                    "created_at": row["created_at"],
+                }
+                for row in cursor.fetchall()
+            ]
+
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to list transcriptions: {e}") from e
+
+    def delete_transcription(self, transcription_id: str) -> bool:
+        """Delete transcription and its segments.
+
+        Note: Does NOT delete the audio file. Caller must handle that.
+
+        Args:
+            transcription_id: Transcription ID to delete
+
+        Returns:
+            True if deleted, False if not found
+
+        Raises:
+            SQLiteStoreError: If delete fails
+        """
+        try:
+            cursor = self._conn.cursor()
+
+            # Check if exists
+            cursor.execute(
+                "SELECT 1 FROM transcriptions WHERE id = ?",
+                (transcription_id,),
+            )
+            if not cursor.fetchone():
+                return False
+
+            # Segments deleted via ON DELETE CASCADE
+            cursor.execute(
+                "DELETE FROM transcriptions WHERE id = ?",
+                (transcription_id,),
+            )
+
+            self._conn.commit()
+            return True
+
+        except Exception as e:
+            self._conn.rollback()
+            raise SQLiteStoreError(f"Failed to delete transcription: {e}") from e

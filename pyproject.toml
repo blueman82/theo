@@ -26,8 +26,10 @@ dependencies = [
     "python-dotenv",
     # Audio Processing
     "sounddevice",
+    "soundfile",
     "scipy",
     "numpy",
+    "mlx-audio",
     # TUI
     "rich",
 ]
@@ -86,6 +88,7 @@ module = [
     "mlx_audio.*",
     "sqlite_vec",
     "sounddevice",
+    "soundfile",
     "scipy.*",
     "rich.*",
     "transformers",
@@ -110,4 +113,8 @@ line_length = 100
 [dependency-groups]
 dev = [
     "chromadb",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-cov>=7.0.0",
+    "pytest-mock>=3.15.1",
 ]
