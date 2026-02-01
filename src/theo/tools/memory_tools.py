@@ -584,6 +584,14 @@ class MemoryTools:
                     except Exception as e:
                         relation_errors.append(f"Failed to create relation to '{target_id}': {e}")
 
+            # Auto-infer relationships to existing memories
+            auto_relations = await self._infer_relationships(
+                memory_id=memory_id,
+                content=content,
+                namespace=namespace,
+            )
+            created_relations.extend(auto_relations)
+
             # Extract auto-superseded IDs for return value
             superseded_ids = [rel["target_id"] for rel in auto_supersedes]
 
