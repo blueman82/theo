@@ -955,8 +955,8 @@ class TestMCPToolWorkflows:
         assert recall_result["success"] is True
         assert recall_result["data"]["total"] >= 2
 
-        # 3. Validate
-        validate_result = await memory_validate(memory_id=id1, was_helpful=True)
+        # 3. Validate via memory_outcome with skip_event=True
+        validate_result = await memory_outcome(memory_id=id1, success=True, skip_event=True)
         assert validate_result["success"] is True
 
         # 4. Get context
