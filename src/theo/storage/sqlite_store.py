@@ -746,36 +746,35 @@ class SQLiteStore:
             List of orphan memory dicts
         """
         try:
-            with self._connect() as conn:
-                cursor = conn.cursor()
+            cursor = self._conn.cursor()
 
-                # Find memories that are not in edges table (as source or target)
-                if namespace:
-                    cursor.execute(
-                        """
-                        SELECT m.* FROM memories m
-                        WHERE m.namespace = ?
-                        AND m.id NOT IN (SELECT source_id FROM edges)
-                        AND m.id NOT IN (SELECT target_id FROM edges)
-                        ORDER BY m.created_at DESC
-                        LIMIT ? OFFSET ?
-                        """,
-                        (namespace, limit, offset),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        SELECT m.* FROM memories m
-                        WHERE m.id NOT IN (SELECT source_id FROM edges)
-                        AND m.id NOT IN (SELECT target_id FROM edges)
-                        ORDER BY m.created_at DESC
-                        LIMIT ? OFFSET ?
-                        """,
-                        (limit, offset),
-                    )
+            # Find memories that are not in edges table (as source or target)
+            if namespace:
+                cursor.execute(
+                    """
+                    SELECT m.* FROM memories m
+                    WHERE m.namespace = ?
+                    AND m.id NOT IN (SELECT source_id FROM edges)
+                    AND m.id NOT IN (SELECT target_id FROM edges)
+                    ORDER BY m.created_at DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (namespace, limit, offset),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT m.* FROM memories m
+                    WHERE m.id NOT IN (SELECT source_id FROM edges)
+                    AND m.id NOT IN (SELECT target_id FROM edges)
+                    ORDER BY m.created_at DESC
+                    LIMIT ? OFFSET ?
+                    """,
+                    (limit, offset),
+                )
 
-                rows = cursor.fetchall()
-                return [self._row_to_memory(row) for row in rows]
+            rows = cursor.fetchall()
+            return [self._row_to_memory(row) for row in rows]
 
         except Exception as e:
             raise SQLiteStoreError(f"Failed to find orphan memories: {e}") from e
@@ -790,30 +789,29 @@ class SQLiteStore:
             Number of orphan memories
         """
         try:
-            with self._connect() as conn:
-                cursor = conn.cursor()
+            cursor = self._conn.cursor()
 
-                if namespace:
-                    cursor.execute(
-                        """
-                        SELECT COUNT(*) FROM memories m
-                        WHERE m.namespace = ?
-                        AND m.id NOT IN (SELECT source_id FROM edges)
-                        AND m.id NOT IN (SELECT target_id FROM edges)
-                        """,
-                        (namespace,),
-                    )
-                else:
-                    cursor.execute(
-                        """
-                        SELECT COUNT(*) FROM memories m
-                        WHERE m.id NOT IN (SELECT source_id FROM edges)
-                        AND m.id NOT IN (SELECT target_id FROM edges)
-                        """
-                    )
+            if namespace:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM memories m
+                    WHERE m.namespace = ?
+                    AND m.id NOT IN (SELECT source_id FROM edges)
+                    AND m.id NOT IN (SELECT target_id FROM edges)
+                    """,
+                    (namespace,),
+                )
+            else:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*) FROM memories m
+                    WHERE m.id NOT IN (SELECT source_id FROM edges)
+                    AND m.id NOT IN (SELECT target_id FROM edges)
+                    """
+                )
 
-                result = cursor.fetchone()
-                return result[0] if result else 0
+            result = cursor.fetchone()
+            return result[0] if result else 0
 
         except Exception as e:
             raise SQLiteStoreError(f"Failed to count orphan memories: {e}") from e
