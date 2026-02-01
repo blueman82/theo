@@ -1,38 +1,45 @@
 ---
 name: contradictions
-description: "DEPRECATED: Use /health --include-contradictions instead. Contradiction detection is now part of memory_analyze_health."
+description: Detect contradicting memories (redirects to /health --include-contradictions)
 ---
 
-# Detect Contradictions (DEPRECATED)
+# Detect Contradictions
 
-This skill has been consolidated into `/health`.
+**This skill redirects to `/health` with contradiction detection enabled.**
 
-## Migration
+## Instructions
 
-Use `/health` with the `--include-contradictions` flag:
-
-```
-/health --include-contradictions
-```
-
-Or use the API directly:
+When user invokes `/contradictions`, immediately call memory_analyze_health with contradiction detection:
 
 ```javascript
 await theo.memory_analyze_health({
   include_contradictions: true,
-  include_low_confidence: true,
-  include_stale: true
+  include_low_confidence: false,
+  include_stale: false
 });
 ```
 
-## Why Changed?
+Format output as:
 
-The `memory_detect_contradictions` tool was removed in Theo v2.0 API consolidation:
-- Contradiction detection is now part of `memory_analyze_health`
-- Reduces API surface (13 → 10 memory tools)
-- Health check provides comprehensive analysis in one call
+```
+## Contradiction Analysis
 
-## See Also
+### Conflicts Found: <count>
 
-- `/health` - Comprehensive memory health analysis
-- `/validate` - TRY-LEARN validation cycle
+1. **<source_id>** vs **<target_id>**
+   - Source: "<content preview>"
+   - Target: "<content preview>"
+   - Similarity: 0.XX
+
+2. ...
+
+---
+Note: Full health check available via `/health`
+```
+
+If no contradictions:
+```
+No contradictions found.
+
+Tip: Run `/health` for full system analysis.
+```
