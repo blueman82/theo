@@ -653,19 +653,21 @@ class TestQuickEmbed:
 
     def test_quick_embed_fallback(self):
         """Test quick_embed with fallback (when daemon not running)."""
-        # The quick_embed function imports create_embedding_provider inside the
-        # _do_fallback method, so patch needs to be on theo.embedding module
-        with patch("theo.embedding.factory.create_embedding_provider") as mock_create:
-            mock_provider = Mock()
-            mock_provider.embed_texts = Mock(return_value=[[0.1, 0.2]])
-            mock_provider.close = Mock()
-            mock_create.return_value = mock_provider
+        from theo.daemon.client import DaemonClient
 
-            from theo.daemon.client import quick_embed
+        # Force fallback by making connect fail
+        with patch.object(DaemonClient, "connect", return_value=False):
+            with patch("theo.embedding.create_embedding_provider") as mock_create:
+                mock_provider = Mock()
+                mock_provider.embed_texts = Mock(return_value=[[0.1, 0.2]])
+                mock_provider.close = Mock()
+                mock_create.return_value = mock_provider
 
-            embeddings = quick_embed(["hello"])
+                from theo.daemon.client import quick_embed
 
-            assert embeddings == [[0.1, 0.2]]
+                embeddings = quick_embed(["hello"])
+
+                assert embeddings == [[0.1, 0.2]]
 
 
 @pytest.mark.xdist_group("daemon")
