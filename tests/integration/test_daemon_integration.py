@@ -716,7 +716,6 @@ class TestClientServerIntegration:
                     pass
 
     @pytest.mark.asyncio
-    @pytest.mark.skip(reason="Flaky with concurrent test runners - needs investigation")
     async def test_multiple_clients_concurrent(
         self,
         temp_socket_path: Path,
@@ -731,23 +730,40 @@ class TestClientServerIntegration:
         start_task = asyncio.create_task(server.start())
 
         try:
-            # Wait for server to start
-            for _ in range(50):
+            # Wait for server to start - verify with raw socket test
+            for attempt in range(100):
                 if temp_socket_path.exists():
-                    break
+                    # Try a raw socket connection to verify server is truly ready
+                    try:
+                        reader, writer = await asyncio.open_unix_connection(
+                            str(temp_socket_path)
+                        )
+                        writer.close()
+                        await writer.wait_closed()
+                        break  # Server is ready
+                    except (ConnectionRefusedError, OSError):
+                        pass
                 await asyncio.sleep(0.1)
 
+            # Verify server is actually ready
+            assert temp_socket_path.exists(), "Server socket should exist"
+
             # Create multiple clients
-            client1 = DaemonClient(socket_path=temp_socket_path)
-            client2 = DaemonClient(socket_path=temp_socket_path)
+            client1 = DaemonClient(socket_path=temp_socket_path, auto_fallback=False)
+            client2 = DaemonClient(socket_path=temp_socket_path, auto_fallback=False)
+
+            # Run synchronous client methods in executor
+            loop = asyncio.get_running_loop()
 
             # Both should connect
-            assert client1.connect() is True
-            assert client2.connect() is True
+            connect1 = await loop.run_in_executor(None, client1.connect)
+            connect2 = await loop.run_in_executor(None, client2.connect)
+            assert connect1 is True
+            assert connect2 is True
 
             # Both should be able to ping
-            result1 = client1.ping()
-            result2 = client2.ping()
+            result1 = await loop.run_in_executor(None, client1.ping)
+            result2 = await loop.run_in_executor(None, client2.ping)
 
             assert result1["success"] is True
             assert result2["success"] is True
