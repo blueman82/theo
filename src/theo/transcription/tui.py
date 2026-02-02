@@ -44,7 +44,7 @@ class TranscriptionTUI:
 
     def __init__(
         self,
-        model_path: str = "mlx-community/whisper-large-v3-mlx",
+        model_path: str,
         namespace: str = "default",
         language: str | None = None,
         hybrid_store: HybridStore | None = None,
