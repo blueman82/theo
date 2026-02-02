@@ -18,12 +18,17 @@ from pathlib import Path
 import numpy as np
 import sounddevice as sd
 
+from theo.config import TheoSettings
 from theo.storage.hybrid import HybridStore
 from theo.transcription import audio_storage, tts
 from theo.transcription.audio import AudioCapture
 from theo.transcription.storage import TranscriptionStorage
 from theo.transcription.transcriber import StreamingTranscriber
 from theo.transcription.tui import TranscriptionTUI
+
+# Load settings for default values
+_settings = TheoSettings()
+DEFAULT_WHISPER_MODEL = _settings.whisper_model
 
 
 def list_devices() -> None:
