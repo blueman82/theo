@@ -279,7 +279,7 @@ See [docs/API.md](docs/API.md) for complete API specifications.
 
 ## Claude Code Skills
 
-Theo provides 14 Claude Code skills for convenient CLI access:
+Theo provides 15 Claude Code skills for convenient CLI access:
 
 | Skill | Description | Example |
 |-------|-------------|---------|
