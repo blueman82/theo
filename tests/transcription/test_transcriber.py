@@ -44,7 +44,7 @@ class TestStreamingTranscriber:
 
     def test_streaming_transcriber_lazy_load(self, mock_whisper_model: MagicMock) -> None:
         """Model loaded on _ensure_model(), not at init."""
-        transcriber = StreamingTranscriber()
+        transcriber = StreamingTranscriber(model_path=TEST_MODEL_PATH)
 
         # Model not loaded yet
         assert transcriber._model is None
@@ -59,7 +59,7 @@ class TestStreamingTranscriber:
         """Verify _ensure_model caches the model after first load."""
         mock_model = MagicMock(name="mock_model")
 
-        transcriber = StreamingTranscriber()
+        transcriber = StreamingTranscriber(model_path=TEST_MODEL_PATH)
         transcriber._model = mock_model  # Simulate loaded model
 
         # Calls should return cached model
