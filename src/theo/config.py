@@ -69,10 +69,9 @@ class TheoSettings(BaseSettings):
     # Token budget (required)
     default_token_budget: int = Field(description="Default token budget for context generation")
 
-    # Transcription configuration (optional, with defaults)
+    # Transcription configuration (required)
     whisper_model: str = Field(
-        default="mlx-community/whisper-large-v3-mlx",
-        description="MLX Whisper model for speech-to-text transcription",
+        description="MLX Whisper model for speech-to-text transcription"
     )
 
     # TTS configuration (optional, with defaults)
