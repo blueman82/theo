@@ -11,16 +11,19 @@ import numpy as np
 from theo.transcription.transcriber import StreamingTranscriber
 from theo.transcription.types import AudioChunk
 
+# Test model path - model_path is now required (no default)
+TEST_MODEL_PATH = "mlx-community/whisper-large-v3-mlx"
+
 
 class TestStreamingTranscriber:
     """Tests for StreamingTranscriber class."""
 
     def test_streaming_transcriber_init(self) -> None:
         """Verify _model is None initially (lazy loading)."""
-        transcriber = StreamingTranscriber()
+        transcriber = StreamingTranscriber(model_path=TEST_MODEL_PATH)
 
         assert transcriber._model is None
-        assert transcriber._model_path == "mlx-community/whisper-turbo"
+        assert transcriber._model_path == TEST_MODEL_PATH
         assert transcriber._chunk_duration == 1.0
         assert transcriber._frame_threshold == 25
         assert transcriber._language is None
