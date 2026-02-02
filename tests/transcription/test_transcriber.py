@@ -98,7 +98,7 @@ class TestStreamingTranscriber:
         mock_capture.get_audio_stream.return_value = iter([mock_chunk])
 
         # Create transcriber with mocked model
-        transcriber = StreamingTranscriber()
+        transcriber = StreamingTranscriber(model_path=TEST_MODEL_PATH)
         transcriber._model = mock_model
 
         segments = list(transcriber.transcribe_stream(mock_capture))
@@ -112,7 +112,7 @@ class TestStreamingTranscriber:
 
     def test_transcriber_close(self) -> None:
         """Verify _model set to None after close()."""
-        transcriber = StreamingTranscriber()
+        transcriber = StreamingTranscriber(model_path=TEST_MODEL_PATH)
         transcriber._model = MagicMock(name="loaded_model")
 
         transcriber.close()
@@ -121,7 +121,7 @@ class TestStreamingTranscriber:
 
     def test_transcriber_context_manager(self, mock_whisper_model: MagicMock) -> None:
         """Verify context manager calls close() on exit."""
-        with StreamingTranscriber() as transcriber:
+        with StreamingTranscriber(model_path=TEST_MODEL_PATH) as transcriber:
             # __enter__ loads model via _ensure_model
             assert transcriber._model is mock_whisper_model
 
