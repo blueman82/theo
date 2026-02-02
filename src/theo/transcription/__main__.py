@@ -26,9 +26,8 @@ from theo.transcription.storage import TranscriptionStorage
 from theo.transcription.transcriber import StreamingTranscriber
 from theo.transcription.tui import TranscriptionTUI
 
-# Load settings for default values
+# Load settings - whisper_model is required from .env
 _settings = TheoSettings()
-DEFAULT_WHISPER_MODEL = _settings.whisper_model
 
 
 def list_devices() -> None:
