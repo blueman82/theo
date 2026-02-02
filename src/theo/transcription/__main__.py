@@ -200,7 +200,7 @@ def run_oneshot(
             while True:
                 elapsed = time.time() - start_time
                 if elapsed > max_duration:
-                    print(f"\nMax duration reached", file=sys.stderr)
+                    print("\nMax duration reached", file=sys.stderr)
                     break
 
                 try:
