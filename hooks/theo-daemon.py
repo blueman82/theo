@@ -565,23 +565,20 @@ class ClassificationWorker:
     async def _process_batch(self, batch: list[ClassificationQueueItem]) -> int:
         """Process a batch of memories for LLM classification.
 
-        For each memory, calls both classification tools:
-        1. memory_detect_contradictions - finds contradicting memories
-        2. memory_check_supersedes - checks if memory supersedes older ones
+        Checks for contradicting memories via memory_detect_contradictions.
+        Note: supersedes detection removed - now handled by supersedes_query
+        parameter in memory_store at write time.
 
         Args:
             batch: List of queue items to process.
 
         Returns:
-            Number of edges upgraded.
+            Number of contradiction edges created.
         """
         upgraded = 0
 
         for item in batch:
-            contradictions_count = 0
-            supersedes_count = 0
-
-            # 1. Check for contradictions
+            # Check for contradictions
             try:
                 result = await call_theo_async(
                     "memory_detect_contradictions",
@@ -593,38 +590,15 @@ class ClassificationWorker:
 
                 if result.get("success"):
                     contradictions = result.get("contradictions", [])
-                    contradictions_count = len(contradictions)
-                    upgraded += contradictions_count
+                    if contradictions:
+                        upgraded += len(contradictions)
+                        self.logger.info(
+                            f"Found {len(contradictions)} contradictions for {item.memory_id}"
+                        )
 
             except Exception as e:
                 self.logger.warning(
                     f"Contradiction detection failed for {item.memory_id}: {e}"
-                )
-
-            # 2. Check for supersedes relationships
-            try:
-                result = await call_theo_async(
-                    "memory_check_supersedes",
-                    {
-                        "memory_id": item.memory_id,
-                    },
-                    self.logger,
-                )
-
-                if result.get("success") and result.get("superseded_id"):
-                    supersedes_count = 1
-                    upgraded += 1
-
-            except Exception as e:
-                self.logger.warning(
-                    f"Supersedes check failed for {item.memory_id}: {e}"
-                )
-
-            # Log if any classification occurred
-            if contradictions_count or supersedes_count:
-                self.logger.info(
-                    f"Classified {item.memory_id}: "
-                    f"{contradictions_count} contradicts, {supersedes_count} supersedes"
                 )
 
         return upgraded
