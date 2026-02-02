@@ -297,6 +297,7 @@ Theo provides 15 Claude Code skills for convenient CLI access:
 | `/health` | Analyze memory system health (includes contradictions) | `/health --include-contradictions` |
 | `/history` | View validation event timeline | `/history mem_abc123` |
 | `/graph` | Visualize memory relationships | `/graph mem_abc123 --format mermaid` |
+| `/contradictions` | Detect contradicting memories | `/contradictions --namespace project:theo` |
 
 ### Installing Skills
 
