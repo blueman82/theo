@@ -955,6 +955,159 @@ def track_mcp_activity(
 
 
 # =============================================================================
+# Intelligent Memory Filtering
+# =============================================================================
+
+
+def _should_store(parsed: HookInput) -> tuple[bool, str, float]:
+    """Filter: only store meaningful memories from tool execution.
+
+    Args:
+        parsed: Parsed hook input with tool_name, tool_input, tool_response.
+
+    Returns:
+        Tuple of (should_store, memory_type, importance).
+    """
+    tool = parsed.tool_name
+    inp = parsed.tool_input or {}
+    resp = parsed.tool_response or {}
+
+    # Error→Fix patterns (highest value) - check if this resolves a pending error
+    if parsed.session_id:
+        unresolved = get_unresolved_errors(parsed.session_id)
+        if unresolved:
+            for error in reversed(unresolved[-3:]):
+                if _is_likely_fix(error, tool, inp):
+                    return True, "pattern", 0.7
+
+    # User decisions via AskUserQuestion
+    if tool == "AskUserQuestion":
+        answers = resp.get("answers") if isinstance(resp, dict) else None
+        if answers:
+            return True, "preference", 0.6
+
+    # Task with meaningful prompt (not exploration)
+    if tool == "Task":
+        prompt = inp.get("prompt", "")
+        desc = inp.get("description", "")
+        agent = inp.get("subagent_type", "")
+        # Skip Explore/Plan agents - they're just searching
+        if agent in ("Explore", "Plan"):
+            return False, "", 0.0
+        # Store if prompt indicates architectural work
+        keywords = ["implement", "fix", "refactor", "create", "add", "build"]
+        if len(prompt) > 100 or any(kw in desc.lower() for kw in keywords):
+            return True, "decision", 0.6
+
+    # Bash with description indicates intentional action
+    if tool == "Bash":
+        desc = inp.get("description", "")
+        if desc and len(desc) > 20:
+            return True, "decision", 0.5
+
+    # Write/Edit to non-test files ONLY if fixing an error
+    if tool in ("Write", "Edit"):
+        success = resp.get("success") if isinstance(resp, dict) else False
+        if success:
+            path = inp.get("file_path", "")
+            if path and "test" not in path.lower() and "__pycache__" not in path:
+                # Only store if this was fixing an error
+                if parsed.session_id:
+                    unresolved = get_unresolved_errors(parsed.session_id)
+                    if unresolved:
+                        return True, "pattern", 0.6
+
+    return False, "", 0.0
+
+
+def _store_meaningful_memory(parsed: HookInput, mem_type: str, importance: float) -> None:
+    """Store a meaningful memory based on the tool execution.
+
+    Args:
+        parsed: Parsed hook input.
+        mem_type: Memory type (pattern, preference, decision).
+        importance: Importance score (0.0-1.0).
+    """
+    import json
+    import os
+
+    try:
+        os.chdir(parsed.cwd)
+        namespace = _get_project_namespace_from_cwd()
+
+        # Build concise, meaningful content
+        content = _format_meaningful_content(parsed)
+        if not content:
+            return
+
+        with get_shared_client() as client:
+            client.store(
+                content=content,
+                namespace=namespace,
+                memory_type=mem_type,
+                importance=importance,
+                metadata={
+                    "source": "theo-track",
+                    "tool_name": parsed.tool_name,
+                    "session_id": parsed.session_id,
+                },
+            )
+    except Exception:
+        pass  # Don't fail if storage fails
+
+
+def _format_meaningful_content(parsed: HookInput) -> str | None:
+    """Format tool execution into meaningful memory content.
+
+    Args:
+        parsed: Parsed hook input.
+
+    Returns:
+        Formatted content string or None if not meaningful.
+    """
+    tool = parsed.tool_name
+    inp = parsed.tool_input or {}
+    resp = parsed.tool_response or {}
+
+    if tool == "AskUserQuestion":
+        questions = inp.get("questions", [])
+        answers = resp.get("answers", {}) if isinstance(resp, dict) else {}
+        if questions and answers:
+            parts = ["User decision:"]
+            for q in questions:
+                question = q.get("question", "")
+                header = q.get("header", "")
+                if header in answers:
+                    parts.append(f"Q: {question}")
+                    parts.append(f"A: {answers[header]}")
+            return "\n".join(parts) if len(parts) > 1 else None
+        return None
+
+    if tool == "Task":
+        desc = inp.get("description", "")
+        prompt = inp.get("prompt", "")[:500]
+        agent = inp.get("subagent_type", "")
+        return f"Task delegation ({agent}): {desc}\nPrompt: {prompt}"
+
+    if tool == "Bash":
+        desc = inp.get("description", "")
+        cmd = inp.get("command", "")[:200]
+        return f"Bash action: {desc}\nCommand: {cmd}"
+
+    if tool in ("Write", "Edit"):
+        path = inp.get("file_path", "")
+        if tool == "Edit":
+            old = inp.get("old_string", "")[:100]
+            new = inp.get("new_string", "")[:100]
+            return f"Fix applied to {path}:\nOld: {old}\nNew: {new}"
+        else:
+            content_preview = inp.get("content", "")[:200]
+            return f"File written: {path}\nContent preview: {content_preview}"
+
+    return None
+
+
+# =============================================================================
 # Core Tracking Logic
 # =============================================================================
 
