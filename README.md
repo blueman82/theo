@@ -40,6 +40,12 @@
 - **Golden Rules**: High-confidence memories become protected principles
 - **Namespace Scoping**: Organize memories by project or globally
 
+### Voice Transcription
+- **MLX Whisper**: Local speech-to-text using MLX-optimized Whisper models
+- **Streaming Transcription**: Real-time transcription with silence detection
+- **Text-to-Speech**: Local TTS for voice responses
+- **Memory Integration**: Transcriptions stored as searchable memories
+
 ### Unified Capabilities
 - **Local Embeddings**: Privacy-first using MLX (Apple Silicon) or Ollama
 - **Daemon Service**: Non-blocking embedding via Unix socket IPC
