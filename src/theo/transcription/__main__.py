@@ -27,7 +27,8 @@ from theo.transcription.transcriber import StreamingTranscriber
 from theo.transcription.tui import TranscriptionTUI
 
 # Load settings - whisper_model is required from .env
-_settings = TheoSettings()
+# Note: TheoSettings loads from env vars, pyright doesn't understand pydantic_settings
+_settings = TheoSettings()  # type: ignore[call-arg]
 
 
 def list_devices() -> None:
