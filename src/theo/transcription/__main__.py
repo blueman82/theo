@@ -240,8 +240,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Theo Voice Transcription")
     parser.add_argument(
         "--model",
-        default=DEFAULT_WHISPER_MODEL,
-        help="HuggingFace model path for Whisper",
+        default=_settings.whisper_model,
+        help="HuggingFace model path for Whisper (from THEO_WHISPER_MODEL)",
     )
     parser.add_argument(
         "--namespace",
