@@ -665,6 +665,6 @@ Full pipeline tests with real components:
 ### Mock Strategy
 
 Tests use fixtures for isolation:
-- `mock_daemon_client`: Returns deterministic embeddings
-- `temp_chroma`: In-memory SQLite for isolated tests
+- `mock_embedder`: Returns deterministic embeddings without MLX/Ollama
+- `temp_sqlite`: Temporary SQLite database for isolated tests
 - `tmp_path`: Temporary directories for file operations
