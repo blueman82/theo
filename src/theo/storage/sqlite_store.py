@@ -1332,10 +1332,10 @@ class SQLiteStore:
     # Search Operations
     # =========================================================================
 
-    # sqlite-vec KNN search has an undocumented LIMIT ceiling that varies by database size.
-    # Testing shows "unknown error" occurs at LIMIT >= 594 on databases with 77k+ vectors.
-    # Use 500 as safe maximum with margin for error.
-    _VEC_KNN_MAX_LIMIT = 500
+    # sqlite-vec KNN search has an undocumented LIMIT ceiling that varies by database size
+    # and exhibits transient "unknown error" failures. Use conservative limit with retry.
+    _VEC_KNN_MAX_LIMIT = 100
+    _VEC_KNN_MAX_RETRIES = 3
 
     def search_vector(
         self,
@@ -1343,7 +1343,7 @@ class SQLiteStore:
         n_results: int = 5,
         where: dict | None = None,
     ) -> list[SearchResult]:
-        """KNN search using sqlite-vec.
+        """KNN search using sqlite-vec with retry for transient errors.
 
         Args:
             embedding: Query embedding vector
@@ -1353,82 +1353,88 @@ class SQLiteStore:
         Returns:
             List of SearchResult sorted by similarity (highest first)
         """
-        try:
-            # Cap n_results to avoid sqlite-vec "unknown error" on large LIMIT values
-            n_results = min(n_results, self._VEC_KNN_MAX_LIMIT)
+        # Cap n_results to avoid sqlite-vec errors
+        n_results = min(n_results, self._VEC_KNN_MAX_LIMIT)
 
-            cursor = self._conn.cursor()
+        # Build filter conditions
+        conditions: list[str] = []
+        params: list[Any] = []
 
-            # Build filter conditions
-            conditions = []
-            params: list[Any] = []
+        if where:
+            if "namespace" in where:
+                conditions.append("m.namespace = ?")
+                params.append(where["namespace"])
+            if "memory_type" in where:
+                conditions.append("m.memory_type = ?")
+                params.append(where["memory_type"])
 
-            if where:
-                if "namespace" in where:
-                    conditions.append("m.namespace = ?")
-                    params.append(where["namespace"])
-                if "memory_type" in where:
-                    conditions.append("m.memory_type = ?")
-                    params.append(where["memory_type"])
+        filter_clause = " AND " + " AND ".join(conditions) if conditions else ""
 
-            filter_clause = " AND " + " AND ".join(conditions) if conditions else ""
+        # sqlite-vec KNN search with cosine distance
+        query = f"""
+            SELECT m.*, v.distance
+            FROM memories m
+            JOIN (
+                SELECT id, distance
+                FROM memories_vec
+                WHERE embedding MATCH ?
+                ORDER BY distance
+                LIMIT ?
+            ) v ON m.id = v.id
+            WHERE 1=1 {filter_clause}
+            ORDER BY v.distance
+        """
 
-            # sqlite-vec KNN search with cosine distance
-            # Note: vec0 uses MATCH for KNN queries
-            query = f"""
-                SELECT m.*, v.distance
-                FROM memories m
-                JOIN (
-                    SELECT id, distance
-                    FROM memories_vec
-                    WHERE embedding MATCH ?
-                    ORDER BY distance
-                    LIMIT ?
-                ) v ON m.id = v.id
-                WHERE 1=1 {filter_clause}
-                ORDER BY v.distance
-            """
+        vec_param = self._serialize_embedding(embedding)
+        last_error: Exception | None = None
 
-            # For sqlite-vec, we need to pass the vector as bytes
-            vec_param = self._serialize_embedding(embedding)
-            cursor.execute(query, [vec_param, n_results] + params)
+        # Retry with progressively smaller limits on transient errors
+        limits_to_try = [n_results, n_results // 2, 10, 5]
+        limits_to_try = [lim for lim in limits_to_try if lim > 0]
 
-            results = []
-            for row in cursor.fetchall():
-                # Convert cosine distance to similarity: similarity = 1.0 - distance
-                # sqlite-vec cosine distance is in range [0, 2]
-                distance = row["distance"]
-                similarity = 1.0 - (distance / 2.0)  # Normalize to [0, 1]
+        for attempt, limit in enumerate(limits_to_try):
+            try:
+                cursor = self._conn.cursor()
+                cursor.execute(query, [vec_param, limit] + params)
 
-                tags = None
-                if row["tags"]:
-                    try:
-                        tags = json.loads(row["tags"])
-                    except json.JSONDecodeError:
-                        pass
+                results: list[SearchResult] = []
+                for row in cursor.fetchall():
+                    distance = row["distance"]
+                    similarity = 1.0 - (distance / 2.0)
 
-                results.append(
-                    SearchResult(
-                        id=row["id"],
-                        content=row["content"],
-                        score=similarity,
-                        memory_type=row["memory_type"],
-                        namespace=row["namespace"],
-                        confidence=row["confidence"],
-                        importance=row["importance"],
-                        source_file=row["source_file"],
-                        chunk_index=row["chunk_index"],
-                        metadata=tags,
-                        last_accessed=row["last_accessed"],
-                        created_at=row["created_at"],
-                        access_count=row["access_count"] or 0,
+                    tags = None
+                    if row["tags"]:
+                        try:
+                            tags = json.loads(row["tags"])
+                        except json.JSONDecodeError:
+                            pass
+
+                    results.append(
+                        SearchResult(
+                            id=row["id"],
+                            content=row["content"],
+                            score=similarity,
+                            memory_type=row["memory_type"],
+                            namespace=row["namespace"],
+                            confidence=row["confidence"],
+                            importance=row["importance"],
+                            source_file=row["source_file"],
+                            chunk_index=row["chunk_index"],
+                            metadata=tags,
+                            last_accessed=row["last_accessed"],
+                            created_at=row["created_at"],
+                            access_count=row["access_count"] or 0,
+                        )
                     )
-                )
 
-            return results
+                return results
 
-        except Exception as e:
-            raise SQLiteStoreError(f"Failed to search vectors: {e}") from e
+            except sqlite3.OperationalError as e:
+                last_error = e
+                logger.warning(f"sqlite-vec search failed (attempt {attempt + 1}, limit={limit}): {e}")
+                continue
+
+        raise SQLiteStoreError(f"Failed to search vectors after retries: {last_error}") from last_error
 
     def search_fts(
         self,
@@ -1562,15 +1568,12 @@ class SQLiteStore:
 
         try:
             # Get more results from each search to have overlap for fusion
-            fetch_count = n_results * 3
+            # Cap to MAX_LIMIT to avoid sqlite-vec errors
+            fetch_count = min(n_results * 3, self._VEC_KNN_MAX_LIMIT)
 
             # Perform both searches with filters
-            # Note: sqlite-vec KNN doesn't support pre-filtering, so we fetch more results
-            # and rely on post-filtering. When filtering by namespace, request more results
-            # (up to _VEC_KNN_MAX_LIMIT) to compensate for post-filter reduction.
-            # search_vector will cap to _VEC_KNN_MAX_LIMIT internally.
-            vec_fetch = fetch_count * 10 if where else fetch_count
-            vector_results = self.search_vector(embedding, n_results=vec_fetch, where=where)
+            # search_vector handles retries internally for transient errors
+            vector_results = self.search_vector(embedding, n_results=fetch_count, where=where)
             fts_results = self.search_fts(query, n_results=fetch_count, where=where)
 
             # Build combined scores using RRF
