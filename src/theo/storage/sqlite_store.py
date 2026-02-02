@@ -1332,6 +1332,11 @@ class SQLiteStore:
     # Search Operations
     # =========================================================================
 
+    # sqlite-vec KNN search has an undocumented LIMIT ceiling that varies by database size.
+    # Testing shows "unknown error" occurs at LIMIT >= 594 on databases with 77k+ vectors.
+    # Use 500 as safe maximum with margin for error.
+    _VEC_KNN_MAX_LIMIT = 500
+
     def search_vector(
         self,
         embedding: list[float],
@@ -1342,13 +1347,16 @@ class SQLiteStore:
 
         Args:
             embedding: Query embedding vector
-            n_results: Number of results to return
+            n_results: Number of results to return (capped at _VEC_KNN_MAX_LIMIT)
             where: Optional filter dict (namespace, memory_type)
 
         Returns:
             List of SearchResult sorted by similarity (highest first)
         """
         try:
+            # Cap n_results to avoid sqlite-vec "unknown error" on large LIMIT values
+            n_results = min(n_results, self._VEC_KNN_MAX_LIMIT)
+
             cursor = self._conn.cursor()
 
             # Build filter conditions
