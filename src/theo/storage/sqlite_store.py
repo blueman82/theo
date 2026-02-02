@@ -1566,9 +1566,10 @@ class SQLiteStore:
 
             # Perform both searches with filters
             # Note: sqlite-vec KNN doesn't support pre-filtering, so we fetch more results
-            # and rely on post-filtering. Fetch 50x more when filtering by namespace.
-            # Cap at 4096 which is sqlite-vec's maximum k value.
-            vec_fetch = min(fetch_count * 50, 4096) if where else fetch_count
+            # and rely on post-filtering. When filtering by namespace, request more results
+            # (up to _VEC_KNN_MAX_LIMIT) to compensate for post-filter reduction.
+            # search_vector will cap to _VEC_KNN_MAX_LIMIT internally.
+            vec_fetch = fetch_count * 10 if where else fetch_count
             vector_results = self.search_vector(embedding, n_results=vec_fetch, where=where)
             fts_results = self.search_fts(query, n_results=fetch_count, where=where)
 
