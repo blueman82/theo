@@ -90,6 +90,7 @@ def call_theo(tool_name: str, args: dict) -> dict:
     proc = None
     try:
         theo_paths = [
+            Path.home() / "Documents" / "Github" / "theo",
             Path(__file__).parent.parent,
             Path.home() / "Github" / "theo",
             Path.home() / ".local" / "share" / "theo",
