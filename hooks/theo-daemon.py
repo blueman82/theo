@@ -333,6 +333,10 @@ class Logger:
         """Log an error message."""
         self.log(message, "ERROR")
 
+    def debug(self, message: str) -> None:
+        """Log a debug message (no-op for production daemon)."""
+        pass  # Debug messages not logged to keep logs clean
+
 
 # =============================================================================
 # Memory Cache
