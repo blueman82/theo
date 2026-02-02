@@ -173,7 +173,6 @@ class Worker:
             job: The job to process.
         """
         job.mark_processing()
-        logger.debug(f"Processing job {job.job_id} with {len(job.texts)} texts")
 
         try:
             # Run embedding in executor to not block event loop
@@ -185,7 +184,6 @@ class Worker:
             )
             job.mark_completed(embeddings)
             self._jobs_processed += 1
-            logger.debug(f"Job {job.job_id} completed successfully")
 
         except Exception as e:
             job.mark_failed(str(e))
