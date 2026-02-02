@@ -61,7 +61,7 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/theo.git
+git clone https://github.com/blueman82/theo.git
 cd theo
 
 # Install dependencies using uv
