@@ -1519,27 +1519,16 @@ class SQLiteStore:
     def _escape_fts_query(self, query: str) -> str:
         """Escape FTS5 special characters in query.
 
-        FTS5 uses special syntax for operators. We escape them to
-        treat the query as a literal phrase search.
+        FTS5 has many special characters: AND, OR, NOT, |, ., :, ^, -, +, *, ", (, )
+        Always quote the query to treat it as a literal phrase search.
         """
-        # FTS5 special characters: AND, OR, NOT, -, +, *, ", (, )
-        # For simple queries, wrap terms in double quotes
-        # Remove any existing quotes and re-quote
         cleaned = query.strip()
         if not cleaned:
             return '""'
 
-        # If query contains special FTS characters, quote it
-        special_chars = ['"', "'", "(", ")", "-", "+", "*"]
-        has_special = any(c in cleaned for c in special_chars)
-
-        if has_special:
-            # Escape internal quotes and wrap in quotes
-            escaped = cleaned.replace('"', '""')
-            return f'"{escaped}"'
-
-        # For simple terms, just return as-is (FTS5 will handle it)
-        return cleaned
+        # Escape internal quotes and wrap in quotes for literal matching
+        escaped = cleaned.replace('"', '""')
+        return f'"{escaped}"'
 
     def search_hybrid(
         self,
