@@ -343,6 +343,20 @@ def main():
         else:
             log("no relevant context to inject")
 
+        # Store meaningful prompts as memories
+        should_store, mem_type, importance = _should_store_prompt(prompt)
+        if should_store:
+            store_result = call_theo("memory_store", {
+                "content": prompt[:500],
+                "memory_type": mem_type,
+                "namespace": namespace,
+                "importance": importance,
+            })
+            if store_result.get("success"):
+                log(f"stored prompt as {mem_type}")
+            else:
+                log(f"prompt storage failed: {store_result.get('error', 'unknown')}")
+
         log("done")
 
     except BrokenPipeError:
