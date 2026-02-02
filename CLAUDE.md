@@ -113,11 +113,19 @@ src/theo/
 │   ├── sqlite_store.py  # SQLite + sqlite-vec vector storage
 │   ├── types.py         # Storage type definitions
 │   └── hybrid.py        # Coordinated storage layer
-└── embedding/
-    ├── provider.py      # Abstract embedding provider
-    ├── factory.py       # Backend selection
-    ├── mlx_provider.py  # MLX embeddings (Apple Silicon)
-    └── ollama.py        # Ollama fallback
+├── embedding/
+│   ├── provider.py      # Abstract embedding provider
+│   ├── factory.py       # Backend selection
+│   ├── mlx_provider.py  # MLX embeddings (Apple Silicon)
+│   └── ollama.py        # Ollama fallback
+└── transcription/       # Voice transcription (MLX Whisper)
+    ├── __main__.py      # CLI entry point
+    ├── audio.py         # Audio capture with silence detection
+    ├── transcriber.py   # MLX Whisper transcription
+    ├── tts.py           # Text-to-speech
+    ├── tui.py           # Terminal UI
+    ├── storage.py       # Transcription storage
+    └── types.py         # Type definitions
 ```
 
 ### Key Data Flows
