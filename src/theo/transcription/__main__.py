@@ -241,7 +241,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Theo Voice Transcription")
     parser.add_argument(
         "--model",
-        default="mlx-community/whisper-turbo",
+        default=DEFAULT_WHISPER_MODEL,
         help="HuggingFace model path for Whisper",
     )
     parser.add_argument(
