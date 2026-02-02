@@ -32,7 +32,7 @@ class StreamingTranscriber:
 
     def __init__(
         self,
-        model_path: str = "mlx-community/whisper-large-v3-mlx",
+        model_path: str,
         chunk_duration: float = 1.0,
         frame_threshold: int = 25,
         language: str | None = None,
