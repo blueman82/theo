@@ -152,6 +152,41 @@ def call_theo(tool_name: str, args: dict) -> dict:
             proc.wait()
 
 
+def _should_store_prompt(prompt: str) -> tuple[bool, str, float]:
+    """Determine if prompt contains storable context.
+
+    Args:
+        prompt: The user's submitted prompt text.
+
+    Returns:
+        Tuple of (should_store, memory_type, importance).
+    """
+    # Skip short prompts
+    if len(prompt) < 30:
+        return False, "", 0.0
+
+    # Skip common non-meaningful prompts
+    lower = prompt.lower().strip()
+    skip_phrases = {
+        "continue", "go ahead", "yes", "ok", "proceed", "y", "n",
+        "thanks", "thank you", "got it", "sounds good", "lgtm",
+    }
+    if lower in skip_phrases:
+        return False, "", 0.0
+
+    # Preference signals - highest value
+    preference_keywords = ["prefer", "always", "never", "don't use", "use this", "i like", "i want"]
+    if any(kw in lower for kw in preference_keywords):
+        return True, "preference", 0.6
+
+    # Architectural/decision requests
+    decision_keywords = ["implement", "design", "architect", "refactor", "create", "build", "add"]
+    if any(kw in lower for kw in decision_keywords):
+        return True, "decision", 0.5
+
+    return False, "", 0.0
+
+
 def format_context(memories: list[dict]) -> str | None:
     """Format relevant memories as context for the prompt using RFC 2119 language."""
     if not memories:
