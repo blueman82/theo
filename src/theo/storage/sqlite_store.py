@@ -116,12 +116,16 @@ class SQLiteStore:
             # Ensure directory exists
             self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
-            # Connect with foreign keys enabled
+            # Connect with optimized settings for concurrent access
             self._conn = sqlite3.connect(
                 str(self.db_path),
                 check_same_thread=False,
             )
             self._conn.execute("PRAGMA foreign_keys = ON")
+            # WAL mode for better concurrent read performance (reduces "database locked" errors)
+            self._conn.execute("PRAGMA journal_mode = WAL")
+            # Higher busy timeout (10s) to handle contention gracefully
+            self._conn.execute("PRAGMA busy_timeout = 10000")
             self._conn.row_factory = sqlite3.Row
 
             # Enable extension loading and load sqlite-vec for vector storage
