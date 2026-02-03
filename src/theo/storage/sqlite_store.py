@@ -1361,7 +1361,7 @@ class SQLiteStore:
         n_results = min(n_results, self._VEC_KNN_MAX_LIMIT)
 
         # Build pre-filter for KNN (sqlite-vec supports AND id IN (...) with MATCH)
-        knn_filter = ""
+        knn_filter: str = ""
         knn_params: list[Any] = []
         if where:
             conditions: list[str] = []
