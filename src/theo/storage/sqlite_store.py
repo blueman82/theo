@@ -1396,7 +1396,7 @@ class SQLiteStore:
         last_error: Exception | None = None
 
         # Retry with progressively smaller limits on transient errors
-        limits_to_try = [n_results, n_results // 2, 10, 5]
+        limits_to_try = [knn_limit, knn_limit // 2, 10, 5]
         limits_to_try = [lim for lim in limits_to_try if lim > 0]
 
         for attempt, limit in enumerate(limits_to_try):
