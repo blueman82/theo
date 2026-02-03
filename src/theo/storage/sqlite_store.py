@@ -1434,7 +1434,7 @@ class SQLiteStore:
                         )
                     )
 
-                return results
+                return results[:n_results]
 
             except sqlite3.OperationalError as e:
                 last_error = e
