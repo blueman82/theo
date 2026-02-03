@@ -1360,6 +1360,9 @@ class SQLiteStore:
         # Cap n_results to avoid sqlite-vec errors
         n_results = min(n_results, self._VEC_KNN_MAX_LIMIT)
 
+        # When filters present, fetch max from KNN then filter (fixes namespace bug)
+        knn_limit = self._VEC_KNN_MAX_LIMIT if where else n_results
+
         # Build filter conditions
         conditions: list[str] = []
         params: list[Any] = []
