@@ -1303,6 +1303,26 @@ class SQLiteStore:
         except Exception as e:
             raise SQLiteStoreError(f"Failed to count memories: {e}") from e
 
+    def list_namespaces(self) -> list[dict[str, Any]]:
+        """List all namespaces with their memory counts.
+
+        Returns:
+            List of dicts with namespace name and count, sorted by count descending
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                SELECT namespace, COUNT(*) as count
+                FROM memories
+                GROUP BY namespace
+                ORDER BY count DESC
+                """
+            )
+            return [{"namespace": row[0], "count": row[1]} for row in cursor.fetchall()]
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to list namespaces: {e}") from e
+
     def _row_to_memory(self, row: sqlite3.Row) -> dict:
         """Convert SQLite row to memory dict."""
         memory = {

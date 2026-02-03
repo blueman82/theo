@@ -1766,6 +1766,35 @@ class MemoryTools:
                 "error": str(e),
             }
 
+    async def memory_list_namespaces(self) -> dict[str, Any]:
+        """List all namespaces with their memory counts.
+
+        Returns:
+            Dictionary with:
+            - success: Boolean indicating operation success
+            - data: Dictionary with namespaces list and total count
+            - error: Error message if operation failed
+        """
+        try:
+            namespaces = self._store.list_namespaces()
+            total_memories = sum(ns["count"] for ns in namespaces)
+
+            return {
+                "success": True,
+                "data": {
+                    "namespaces": namespaces,
+                    "total_namespaces": len(namespaces),
+                    "total_memories": total_memories,
+                },
+            }
+
+        except Exception as e:
+            logger.error(f"memory_list_namespaces failed: {e}", exc_info=True)
+            return {
+                "success": False,
+                "error": str(e),
+            }
+
     # =========================================================================
     # Validation Analysis (internal helpers and analyze_health)
     # =========================================================================

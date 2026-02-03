@@ -80,3 +80,4 @@ htmlcov/
 *.tmp
 *.temp
 .cache/
+debug_search.py

@@ -651,6 +651,25 @@ async def memory_list(
 
 
 @mcp.tool()
+async def memory_list_namespaces() -> dict[str, Any]:
+    """List all namespaces with their memory counts.
+
+    Use this to discover what namespaces exist before filtering searches.
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating operation success
+        - data: Dictionary with namespaces list (sorted by count descending),
+                total_namespaces, and total_memories
+        - error: Error message if operation failed
+    """
+    if memory_tools is None:
+        return {"success": False, "error": "Server not initialized"}
+
+    return await memory_tools.memory_list_namespaces()
+
+
+@mcp.tool()
 async def validation_history(
     memory_id: str,
     event_type: Optional[str] = None,
