@@ -1360,35 +1360,31 @@ class SQLiteStore:
         # Cap n_results to avoid sqlite-vec errors
         n_results = min(n_results, self._VEC_KNN_MAX_LIMIT)
 
-        # When filters present, fetch max from KNN then filter (fixes namespace bug)
-        knn_limit = self._VEC_KNN_MAX_LIMIT if where else n_results
-
-        # Build filter conditions
-        conditions: list[str] = []
-        params: list[Any] = []
-
+        # Build pre-filter for KNN (sqlite-vec supports AND id IN (...) with MATCH)
+        knn_filter = ""
+        knn_params: list[Any] = []
         if where:
+            conditions = []
             if "namespace" in where:
-                conditions.append("m.namespace = ?")
-                params.append(where["namespace"])
+                conditions.append("namespace = ?")
+                knn_params.append(where["namespace"])
             if "memory_type" in where:
-                conditions.append("m.memory_type = ?")
-                params.append(where["memory_type"])
+                conditions.append("memory_type = ?")
+                knn_params.append(where["memory_type"])
+            if conditions:
+                knn_filter = f" AND id IN (SELECT id FROM memories WHERE {' AND '.join(conditions)})"
 
-        filter_clause = " AND " + " AND ".join(conditions) if conditions else ""
-
-        # sqlite-vec KNN search with cosine distance
+        # sqlite-vec KNN search with cosine distance and pre-filtering
         query = f"""
             SELECT m.*, v.distance
             FROM memories m
             JOIN (
                 SELECT id, distance
                 FROM memories_vec
-                WHERE embedding MATCH ?
+                WHERE embedding MATCH ?{knn_filter}
                 ORDER BY distance
                 LIMIT ?
             ) v ON m.id = v.id
-            WHERE 1=1 {filter_clause}
             ORDER BY v.distance
         """
 
