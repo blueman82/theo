@@ -1364,7 +1364,7 @@ class SQLiteStore:
         knn_filter = ""
         knn_params: list[Any] = []
         if where:
-            conditions = []
+            conditions: list[str] = []
             if "namespace" in where:
                 conditions.append("namespace = ?")
                 knn_params.append(where["namespace"])
