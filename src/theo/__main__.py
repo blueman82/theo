@@ -469,8 +469,8 @@ def main() -> None:
     # Parse arguments
     args = parse_arguments()
 
-    # Handle trace subcommands
-    if args.subcommand == "trace":
+    # Handle trace subcommands (only exists when trace was the first arg)
+    if getattr(args, "subcommand", None) == "trace":
         if args.trace_command == "init":
             trace_init()
             return
