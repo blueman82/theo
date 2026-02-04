@@ -26,11 +26,17 @@ Usage:
     }
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from theo_client import DaemonClient as DaemonClientType
 
 # Import DaemonClient for fast IPC
 try:
@@ -72,7 +78,54 @@ def get_project_namespace() -> str:
     return "global"
 
 
-def main():
+def register_session_with_daemon(
+    session_id: str,
+    transcript_path: str,
+    project_path: str,
+) -> None:
+    """Register session with Theo daemon for Agent Trace.
+
+    Sends the active session information to the daemon so that
+    Agent Trace can track which Claude Code session is currently active.
+
+    Args:
+        session_id: The unique session identifier from Claude Code.
+        transcript_path: Path to the session's JSONL transcript file.
+        project_path: Path to the project/working directory.
+    """
+    if DaemonClient is None:
+        return
+
+    try:
+        # Extract model from transcript if available
+        model_id: str | None = None
+        transcript = Path(transcript_path)
+        if transcript.exists():
+            # Read first few lines to find model
+            with transcript.open() as f:
+                for line in f:
+                    if '"model"' in line:
+                        try:
+                            entry = json.loads(line)
+                            model_id = entry.get("model")
+                            if model_id:
+                                break
+                        except json.JSONDecodeError:
+                            pass
+
+        with DaemonClient() as client:
+            client.send(
+                "set_active_session",
+                session_id=session_id,
+                transcript_path=transcript_path,
+                model_id=model_id,
+                project_path=project_path,
+            )
+    except Exception:
+        pass  # Don't fail hook if daemon not running
+
+
+def main() -> None:
     """Main hook entry point."""
     log_path = Path.home() / ".claude" / "hooks" / "logs" / "theo-session-start.log"
     log_path.parent.mkdir(parents=True, exist_ok=True)
@@ -81,6 +134,10 @@ def main():
         hook_input = read_hook_input()
         session_id = hook_input.get("session_id") or hook_input.get("sessionId", "unknown")
         cwd = hook_input.get("cwd", str(Path.cwd()))
+        # Handle camelCase and snake_case for transcript path
+        transcript_path = hook_input.get("transcript_path") or hook_input.get(
+            "transcriptPath", ""
+        )
 
         if cwd:
             os.chdir(cwd)
@@ -109,6 +166,13 @@ def main():
                     )
             except Exception:
                 pass  # Don't fail hook if storage fails
+
+        # Register session with daemon for Agent Trace
+        register_session_with_daemon(
+            session_id=session_id,
+            transcript_path=transcript_path,
+            project_path=cwd,
+        )
 
     except Exception as e:
         try:
