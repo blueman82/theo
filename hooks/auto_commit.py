@@ -355,6 +355,24 @@ def commit_file(
         return None, str(e)
 
 
+def _extract_model_from_transcript(session_id: str) -> str | None:
+    """Extract model ID from Claude Code transcript.
+
+    Reads the session transcript and extracts the model field,
+    formatting it per models.dev convention (anthropic/<model>).
+    """
+    try:
+        transcripts = (Path.home() / ".claude" / "projects").rglob(f"{session_id}.jsonl")
+        if transcript := next(transcripts, None):
+            with open(transcript) as f:
+                if first_line := f.readline():
+                    if model := json.loads(first_line).get("model"):
+                        return f"anthropic/{model}"
+    except Exception:
+        pass
+    return None
+
+
 def parse_diff_ranges(diff: str) -> dict[str, list[tuple[int, int]]]:
     """Parse git diff output to extract line ranges per file.
 
@@ -435,10 +453,9 @@ def capture_agent_trace(
         # Build transcript path from session_id
         transcript_path = f"session:{session_id}"
 
-        # Prepare trace arguments for theo
-        # Model ID follows models.dev convention: provider/model-name
-        # Claude Code uses Anthropic models - specific model from CLAUDE_MODEL env or default
-        model_id = os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4")
+        # Extract model_id from transcript (auto-detected from session)
+        # Transcripts at ~/.claude/projects/<encoded-cwd>/<session_id>.jsonl
+        model_id = _extract_model_from_transcript(session_id)
 
         trace_args = json.dumps({
             "commit_sha": commit_sha,
