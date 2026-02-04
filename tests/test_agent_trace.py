@@ -149,6 +149,57 @@ class TestTraceStorage:
         assert trace is not None
         assert trace.created_at > 0
 
+    def test_add_trace_spec_compliant(self, store: SQLiteStore) -> None:
+        """Test adding a spec-compliant trace record."""
+        import json
+        import uuid
+
+        trace_id = store.add_trace(
+            commit_sha="abc123def456spec",
+            conversation_url="/path/to/transcript.jsonl",
+            model_id="claude-opus-4",
+            session_id="test-session",
+            file_ranges={
+                "src/foo.py": [(10, 25), (30, 35)],
+                "src/bar.py": [(1, 5)],
+            },
+        )
+
+        # Verify UUID format
+        uuid.UUID(trace_id)  # Raises if invalid
+
+        trace = store.get_trace("abc123def456spec")
+        assert trace is not None
+
+        # Verify spec fields
+        assert trace.version == "0.1"
+        assert "T" in trace.timestamp  # RFC 3339 has T separator
+
+        # Verify files_json structure
+        files = json.loads(trace.files_json)
+        assert len(files) == 2
+
+        # Find src/foo.py file object
+        foo_file = next((f for f in files if f["path"] == "src/foo.py"), None)
+        assert foo_file is not None
+        assert len(foo_file["conversations"]) == 1
+        assert len(foo_file["conversations"][0]["ranges"]) == 2
+        assert foo_file["conversations"][0]["ranges"][0]["start_line"] == 10
+        assert foo_file["conversations"][0]["ranges"][0]["end_line"] == 25
+        assert foo_file["conversations"][0]["ranges"][1]["start_line"] == 30
+        assert foo_file["conversations"][0]["ranges"][1]["end_line"] == 35
+
+        # Verify vcs_json
+        vcs = json.loads(trace.vcs_json) if trace.vcs_json else None
+        assert vcs is not None
+        assert vcs["type"] == "git"
+        assert vcs["revision"] == "abc123def456spec"
+
+        # Verify tool_json
+        tool = json.loads(trace.tool_json) if trace.tool_json else None
+        assert tool is not None
+        assert tool["name"] == "claude-code"
+
 
 # ============================================================================
 # Daemon Active Session Tests
@@ -280,6 +331,61 @@ class TestCommitHook:
                 os.environ.pop("THEO_TRACE_ENABLED", None)
             else:
                 os.environ["THEO_TRACE_ENABLED"] = original_env
+
+    def test_parse_diff_ranges(self) -> None:
+        """Test git diff line range parsing."""
+        import importlib.util
+
+        hook_path = Path(__file__).parent.parent / "hooks" / "theo-commit-hook.py"
+        spec = importlib.util.spec_from_file_location("theo_commit_hook", hook_path)
+        assert spec is not None
+        assert spec.loader is not None
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        diff_output = (
+            "diff --git a/src/foo.py b/src/foo.py\n"
+            "--- a/src/foo.py\n"
+            "+++ b/src/foo.py\n"
+            "@@ -10,0 +11,5 @@\n"
+            "+    new line 1\n"
+            "+    new line 2\n"
+            "@@ -20,0 +26,3 @@\n"
+            "+    more new code\n"
+        )
+        ranges = module.parse_diff_ranges(diff_output)
+        assert "src/foo.py" in ranges
+        assert (11, 15) in ranges["src/foo.py"]
+        assert (26, 28) in ranges["src/foo.py"]
+
+    def test_parse_diff_ranges_multiple_files(self) -> None:
+        """Test parsing diff with multiple files."""
+        import importlib.util
+
+        hook_path = Path(__file__).parent.parent / "hooks" / "theo-commit-hook.py"
+        spec = importlib.util.spec_from_file_location("theo_commit_hook", hook_path)
+        assert spec is not None
+        assert spec.loader is not None
+
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        diff_output = (
+            "diff --git a/src/a.py b/src/a.py\n"
+            "+++ b/src/a.py\n"
+            "@@ -1,0 +2,3 @@\n"
+            "+line\n"
+            "diff --git a/src/b.py b/src/b.py\n"
+            "+++ b/src/b.py\n"
+            "@@ -5,0 +6,2 @@\n"
+            "+line\n"
+        )
+        ranges = module.parse_diff_ranges(diff_output)
+        assert "src/a.py" in ranges
+        assert "src/b.py" in ranges
+        assert (2, 4) in ranges["src/a.py"]
+        assert (6, 7) in ranges["src/b.py"]
 
 
 # ============================================================================
