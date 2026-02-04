@@ -447,14 +447,11 @@ def main() -> None:
 
     # Handle trace subcommands (only exists when trace was the first arg)
     if getattr(args, "subcommand", None) == "trace":
-        if args.trace_command == "init":
-            trace_init()
-            return
         if args.trace_command == "query":
             trace_query(args.file, args.line)
             return
         # No trace subcommand specified, show help
-        print("Usage: theo trace {init,query}", file=sys.stderr)
+        print("Usage: theo trace query <file> [--line N]", file=sys.stderr)
         sys.exit(1)
 
     # Handle direct tool call mode (for daemon)
