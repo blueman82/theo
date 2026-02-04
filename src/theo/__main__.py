@@ -107,7 +107,6 @@ def parse_arguments() -> argparse.Namespace:
         subparsers = parser.add_subparsers(dest="subcommand")
         trace_parser = subparsers.add_parser("trace", help="Agent Trace commands")
         trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
-        trace_subparsers.add_parser("init", help="Install Agent Trace git hook")
         trace_query_parser = trace_subparsers.add_parser("query", help="Query AI attribution for code")
         trace_query_parser.add_argument("file", type=str, help="File to query")
         trace_query_parser.add_argument(
