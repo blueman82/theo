@@ -384,29 +384,6 @@ def call_tool_directly(args: argparse.Namespace) -> None:
     print(json.dumps(result))
 
 
-def trace_init() -> None:
-    """Install Agent Trace git hook."""
-    git_dir = Path(".git")
-    if not git_dir.exists():
-        print("Error: Not a git repository", file=sys.stderr)
-        sys.exit(1)
-
-    hook_src = Path(__file__).parent.parent.parent / "hooks" / "theo-commit-hook.py"
-    hook_dst = git_dir / "hooks" / "post-commit"
-
-    if not hook_src.exists():
-        print(f"Error: Hook source not found at {hook_src}", file=sys.stderr)
-        sys.exit(1)
-
-    if hook_dst.exists():
-        print(f"Warning: {hook_dst} already exists, backing up...")
-        shutil.move(str(hook_dst), str(hook_dst.with_suffix(".backup")))
-
-    shutil.copy(str(hook_src), str(hook_dst))
-    hook_dst.chmod(0o755)
-    print(f"Installed Agent Trace hook to {hook_dst}")
-
-
 def trace_query(file: str, line: int | None = None) -> None:
     """Query AI attribution for code."""
     import json
