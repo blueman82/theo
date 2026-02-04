@@ -55,6 +55,18 @@ class SearchResult:
     access_count: int = 0
 
 
+@dataclass
+class TraceRecord:
+    """Record of AI attribution for a git commit."""
+
+    commit_sha: str
+    conversation_url: str
+    model_id: str | None
+    session_id: str | None
+    files: list[str]
+    created_at: float
+
+
 # MCP servers must never write to stdout (corrupts JSON-RPC)
 logger = logging.getLogger(__name__)
 
@@ -409,6 +421,13 @@ class SQLiteStore:
             """
             CREATE INDEX IF NOT EXISTS idx_traces_session
             ON traces(session_id)
+        """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_traces_conversation
+            ON traces(conversation_url)
         """
         )
 
@@ -2011,3 +2030,113 @@ class SQLiteStore:
         except Exception as e:
             self._conn.rollback()
             raise SQLiteStoreError(f"Failed to delete transcription: {e}") from e
+
+    # =========================================================================
+    # Trace Operations (Agent Trace)
+    # =========================================================================
+
+    def add_trace(
+        self,
+        commit_sha: str,
+        conversation_url: str,
+        model_id: str | None = None,
+        session_id: str | None = None,
+        files: list[str] | None = None,
+    ) -> None:
+        """Record AI attribution for a git commit.
+
+        Args:
+            commit_sha: Git commit SHA
+            conversation_url: Path to conversation transcript
+            model_id: AI model identifier (e.g., "anthropic/claude-opus-4-5-20251101")
+            session_id: Claude Code session ID
+            files: List of files changed in commit
+
+        Raises:
+            SQLiteStoreError: If insert fails
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                """
+                INSERT OR REPLACE INTO traces
+                (commit_sha, conversation_url, model_id, session_id, files, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    commit_sha,
+                    conversation_url,
+                    model_id,
+                    session_id,
+                    json.dumps(files or []),
+                    time.time(),
+                ),
+            )
+            self._conn.commit()
+        except Exception as e:
+            self._conn.rollback()
+            raise SQLiteStoreError(f"Failed to add trace: {e}") from e
+
+    def get_trace(self, commit_sha: str) -> TraceRecord | None:
+        """Get trace record for a commit.
+
+        Args:
+            commit_sha: Git commit SHA
+
+        Returns:
+            TraceRecord or None if not found
+
+        Raises:
+            SQLiteStoreError: If query fails
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                "SELECT * FROM traces WHERE commit_sha = ?",
+                (commit_sha,),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                return None
+            return TraceRecord(
+                commit_sha=row["commit_sha"],
+                conversation_url=row["conversation_url"],
+                model_id=row["model_id"],
+                session_id=row["session_id"],
+                files=json.loads(row["files"]) if row["files"] else [],
+                created_at=row["created_at"],
+            )
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to get trace: {e}") from e
+
+    def list_traces_for_conversation(self, conversation_url: str) -> list[TraceRecord]:
+        """List all traces for a conversation.
+
+        Args:
+            conversation_url: Conversation transcript path
+
+        Returns:
+            List of TraceRecord objects
+
+        Raises:
+            SQLiteStoreError: If query fails
+        """
+        try:
+            cursor = self._conn.cursor()
+            cursor.execute(
+                "SELECT * FROM traces WHERE conversation_url = ? ORDER BY created_at",
+                (conversation_url,),
+            )
+            return [
+                TraceRecord(
+                    commit_sha=row["commit_sha"],
+                    conversation_url=row["conversation_url"],
+                    model_id=row["model_id"],
+                    session_id=row["session_id"],
+                    files=json.loads(row["files"]) if row["files"] else [],
+                    created_at=row["created_at"],
+                )
+                for row in cursor.fetchall()
+            ]
+        except Exception as e:
+            raise SQLiteStoreError(f"Failed to list traces: {e}") from e
