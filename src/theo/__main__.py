@@ -28,8 +28,11 @@ as it corrupts JSON-RPC messages. All logging goes to stderr.
 import argparse
 import logging
 import os
+import shutil
 import signal
+import subprocess
 import sys
+from pathlib import Path
 from typing import Any
 
 from dotenv import load_dotenv
@@ -87,7 +90,7 @@ def parse_arguments() -> argparse.Namespace:
     """Parse CLI arguments from environment variables.
 
     All configuration comes from .env file (loaded via python-dotenv).
-    No fallback defaults - all THEO_* variables must be set.
+    No fallback defaults - all THEO_* variables must be set (except for trace subcommands).
 
     Returns:
         Parsed arguments namespace
@@ -99,6 +102,29 @@ def parse_arguments() -> argparse.Namespace:
         description="Theo MCP server for unified AI memory and document retrieval",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+
+    # Add subparsers for trace commands
+    subparsers = parser.add_subparsers(dest="subcommand")
+
+    # trace subcommand group
+    trace_parser = subparsers.add_parser("trace", help="Agent Trace commands")
+    trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
+
+    # trace init
+    trace_subparsers.add_parser("init", help="Install Agent Trace git hook")
+
+    # trace query
+    trace_query_parser = trace_subparsers.add_parser("query", help="Query AI attribution for code")
+    trace_query_parser.add_argument("file", type=str, help="File to query")
+    trace_query_parser.add_argument(
+        "--line", "-L", type=int, default=None, help="Line number to query"
+    )
+
+    # Check if we're running a trace subcommand (don't require .env)
+    # Pre-parse to check for trace command before requiring env vars
+    pre_args, _ = parser.parse_known_args()
+    if pre_args.subcommand == "trace":
+        return parser.parse_args()
 
     # Direct tool call mode (for daemon subprocess calls)
     parser.add_argument(
@@ -364,6 +390,65 @@ def call_tool_directly(args: argparse.Namespace) -> None:
     print(json.dumps(result))
 
 
+def trace_init() -> None:
+    """Install Agent Trace git hook."""
+    git_dir = Path(".git")
+    if not git_dir.exists():
+        print("Error: Not a git repository", file=sys.stderr)
+        sys.exit(1)
+
+    hook_src = Path(__file__).parent.parent.parent / "hooks" / "theo-commit-hook.py"
+    hook_dst = git_dir / "hooks" / "post-commit"
+
+    if not hook_src.exists():
+        print(f"Error: Hook source not found at {hook_src}", file=sys.stderr)
+        sys.exit(1)
+
+    if hook_dst.exists():
+        print(f"Warning: {hook_dst} already exists, backing up...")
+        shutil.move(str(hook_dst), str(hook_dst.with_suffix(".backup")))
+
+    shutil.copy(str(hook_src), str(hook_dst))
+    hook_dst.chmod(0o755)
+    print(f"Installed Agent Trace hook to {hook_dst}")
+
+
+def trace_query(file: str, line: int | None = None) -> None:
+    """Query AI attribution for code."""
+    blame_cmd = ["git", "blame", "--porcelain"]
+    if line is not None:
+        blame_cmd.extend(["-L", f"{line},{line}"])
+    blame_cmd.append(file)
+
+    try:
+        result = subprocess.run(blame_cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"Error running git blame: {e.stderr}", file=sys.stderr)
+        sys.exit(1)
+
+    # Extract commit SHA (first 40 chars of first line in porcelain format)
+    lines = result.stdout.strip().split("\n")
+    if not lines:
+        print("No blame output", file=sys.stderr)
+        sys.exit(1)
+
+    commit_sha = lines[0].split()[0][:40]
+
+    from theo.storage.sqlite_store import SQLiteStore
+
+    store = SQLiteStore()
+    trace = store.get_trace(commit_sha)
+    store.close()
+
+    if trace:
+        print("AI Attribution Found:")
+        print(f"  Conversation: {trace.conversation_url}")
+        print(f"  Model: {trace.model_id or 'unknown'}")
+        print(f"  Commit: {commit_sha[:8]}")
+    else:
+        print("No AI attribution found for this code")
+
+
 def main() -> None:
     """Main entry point for MCP server.
 
@@ -381,6 +466,18 @@ def main() -> None:
     """
     # Parse arguments
     args = parse_arguments()
+
+    # Handle trace subcommands
+    if args.subcommand == "trace":
+        if args.trace_command == "init":
+            trace_init()
+            return
+        if args.trace_command == "query":
+            trace_query(args.file, args.line)
+            return
+        # No trace subcommand specified, show help
+        print("Usage: theo trace {init,query}", file=sys.stderr)
+        sys.exit(1)
 
     # Handle direct tool call mode (for daemon)
     if args.call:
