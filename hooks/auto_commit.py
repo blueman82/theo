@@ -356,7 +356,7 @@ def commit_file(
 
 
 def parse_diff_ranges(diff: str) -> dict[str, list[tuple[int, int]]]:
-    """Parse git diff output to extract line ranges per file (Agent Trace v0.1).
+    """Parse git diff output to extract line ranges per file.
 
     Parses @@ -old,count +new_start,new_count @@ hunks from unified diff.
 
@@ -393,7 +393,7 @@ def capture_agent_trace(
     session_id: str | None,
     git_root: str,
 ) -> None:
-    """Capture AI attribution trace after successful commit.
+    """Capture AI attribution trace after successful commit (spec v0.1).
 
     Records the commit in theo's trace storage with line-level attribution
     following the agent-trace.dev specification.
@@ -436,10 +436,15 @@ def capture_agent_trace(
         transcript_path = f"session:{session_id}"
 
         # Prepare trace arguments for theo
+        # Model ID follows models.dev convention: provider/model-name
+        # Claude Code uses Anthropic models - specific model from CLAUDE_MODEL env or default
+        model_id = os.environ.get("CLAUDE_MODEL", "anthropic/claude-sonnet-4")
+
         trace_args = json.dumps({
             "commit_sha": commit_sha,
             "conversation_url": transcript_path,
             "session_id": session_id,
+            "model_id": model_id,
             "file_ranges": {k: list(v) for k, v in file_ranges.items()},
         })
 
@@ -457,6 +462,7 @@ store = SQLiteStore()
 store.add_trace(
     commit_sha=args['commit_sha'],
     conversation_url=args['conversation_url'],
+    model_id=args.get('model_id'),
     session_id=args['session_id'],
     file_ranges={{k: [tuple(r) for r in v] for k, v in args['file_ranges'].items()}},
 )
