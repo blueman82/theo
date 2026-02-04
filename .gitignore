@@ -45,11 +45,15 @@ __pycache__/
 *$py.class
 .Python
 *.so
+.venv
 .venv/
 venv/
 ENV/
+.pytest_cache
 .pytest_cache/
+.mypy_cache
 .mypy_cache/
+.ruff_cache
 .ruff_cache/
 *.egg-info/
 
