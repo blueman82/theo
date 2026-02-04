@@ -503,6 +503,7 @@ def main() -> None:
             query=components["query_tools"],
             memory=components["memory_tools"],
             management=components["management_tools"],
+            store=components["sqlite_store"],
         )
 
         # Register signal handlers for graceful shutdown
