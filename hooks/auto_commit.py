@@ -358,15 +358,17 @@ def commit_file(
 def _extract_model_from_transcript(session_id: str) -> str | None:
     """Extract model ID from Claude Code transcript.
 
-    Reads the session transcript and extracts the model field,
-    formatting it per models.dev convention (anthropic/<model>).
+    Searches transcript for model field (in message.model),
+    formatting per models.dev convention (anthropic/<model>).
     """
     try:
         transcripts = (Path.home() / ".claude" / "projects").rglob(f"{session_id}.jsonl")
         if transcript := next(transcripts, None):
             with open(transcript) as f:
-                if first_line := f.readline():
-                    if model := json.loads(first_line).get("model"):
+                for line in f:
+                    data = json.loads(line)
+                    # Model can be at message.model (assistant responses)
+                    if model := (data.get("message") or {}).get("model"):
                         return f"anthropic/{model}"
     except Exception:
         pass
