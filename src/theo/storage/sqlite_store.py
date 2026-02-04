@@ -82,24 +82,31 @@ class TraceRecord:
 
     @property
     def conversation_url(self) -> str:
-        """Extract conversation URL from metadata_json for backward compatibility."""
-        if self.metadata_json:
-            try:
-                metadata = json.loads(self.metadata_json)
-                return metadata.get("conversation_url", "")
-            except (json.JSONDecodeError, TypeError):
-                pass
+        """Extract conversation URL from files_json for backward compatibility."""
+        try:
+            files_data = json.loads(self.files_json)
+            for file_obj in files_data:
+                if isinstance(file_obj, dict) and "conversations" in file_obj:
+                    for conv in file_obj["conversations"]:
+                        if "url" in conv:
+                            return conv["url"]
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
         return ""
 
     @property
     def model_id(self) -> str | None:
-        """Extract model ID from tool_json for backward compatibility."""
-        if self.tool_json:
-            try:
-                tool = json.loads(self.tool_json)
-                return tool.get("model_id")
-            except (json.JSONDecodeError, TypeError):
-                pass
+        """Extract model ID from files_json contributor for backward compatibility."""
+        try:
+            files_data = json.loads(self.files_json)
+            for file_obj in files_data:
+                if isinstance(file_obj, dict) and "conversations" in file_obj:
+                    for conv in file_obj["conversations"]:
+                        contributor = conv.get("contributor", {})
+                        if "model_id" in contributor:
+                            return contributor["model_id"]
+        except (json.JSONDecodeError, TypeError, KeyError):
+            pass
         return None
 
     @property
@@ -2184,19 +2191,19 @@ class SQLiteStore:
         conversation_url: str,
         model_id: str | None = None,
         session_id: str | None = None,
-        files: list[str] | None = None,
+        file_ranges: dict[str, list[tuple[int, int]]] | None = None,
     ) -> str:
-        """Record AI attribution for a git commit (agent-trace.dev spec compliant).
+        """Record AI attribution for a git commit (spec-compliant).
 
         Args:
             commit_sha: Git commit SHA
             conversation_url: Path to conversation transcript
-            model_id: AI model identifier (e.g., "anthropic/claude-opus-4-5-20251101")
+            model_id: AI model identifier
             session_id: Claude Code session ID
-            files: List of files changed in commit
+            file_ranges: Dict mapping file paths to list of (start_line, end_line) tuples
 
         Returns:
-            Trace ID (UUID)
+            Generated trace ID (UUID)
 
         Raises:
             SQLiteStoreError: If insert fails
@@ -2212,16 +2219,30 @@ class SQLiteStore:
             # Generate RFC 3339 timestamp
             ts = datetime.now(tz=timezone.utc).isoformat()
 
-            # Convert files to spec format (array of file objects)
-            files_spec = [{"path": f} for f in (files or [])]
+            # Build spec-compliant files_json
+            files: list[dict] = []
+            for path, ranges in (file_ranges or {}).items():
+                contributor: dict[str, str] = {"type": "ai"}
+                if model_id:
+                    contributor["model_id"] = model_id
+                files.append(
+                    {
+                        "path": path,
+                        "conversations": [
+                            {
+                                "ranges": [{"start_line": s, "end_line": e} for s, e in ranges],
+                                "url": conversation_url,
+                                "contributor": contributor,
+                            }
+                        ],
+                    }
+                )
 
-            # Build tool_json with model_id
-            tool_json = json.dumps({"model_id": model_id}) if model_id else None
+            # Build vcs_json
+            vcs_json = json.dumps({"type": "git", "revision": commit_sha})
 
-            # Build metadata_json with conversation_url
-            metadata_json = (
-                json.dumps({"conversation_url": conversation_url}) if conversation_url else None
-            )
+            # Build tool_json
+            tool_json = json.dumps({"name": "claude-code", "version": "1.0"})
 
             if existing:
                 cursor.execute(
@@ -2229,16 +2250,16 @@ class SQLiteStore:
                     UPDATE traces SET
                         timestamp = ?,
                         files_json = ?,
+                        vcs_json = ?,
                         tool_json = ?,
-                        metadata_json = ?,
                         session_id = ?
                     WHERE id = ?
                     """,
                     (
                         ts,
-                        json.dumps(files_spec),
+                        json.dumps(files),
+                        vcs_json,
                         tool_json,
-                        metadata_json,
                         session_id,
                         trace_id,
                     ),
@@ -2256,10 +2277,10 @@ class SQLiteStore:
                         trace_id,
                         "0.1",
                         ts,
-                        json.dumps(files_spec),
-                        None,
+                        json.dumps(files),
+                        vcs_json,
                         tool_json,
-                        metadata_json,
+                        None,
                         commit_sha,
                         session_id,
                     ),
@@ -2323,14 +2344,14 @@ class SQLiteStore:
         """
         try:
             cursor = self._conn.cursor()
-            # Query metadata_json for conversation_url
+            # Query files_json for conversation url in conversations array
             cursor.execute(
                 """
                 SELECT * FROM traces
-                WHERE json_extract(metadata_json, '$.conversation_url') = ?
+                WHERE files_json LIKE ?
                 ORDER BY timestamp
                 """,
-                (conversation_url,),
+                (f'%"url": "{conversation_url}"%',),
             )
             return [self._row_to_trace(row) for row in cursor.fetchall()]
         except Exception as e:

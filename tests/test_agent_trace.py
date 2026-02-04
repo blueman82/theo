@@ -60,7 +60,7 @@ class TestTraceStorage:
             conversation_url="/path/to/transcript.jsonl",
             model_id="anthropic/claude-opus-4-5-20251101",
             session_id="test-session-123",
-            files=["src/foo.py", "src/bar.py"],
+            file_ranges={"src/foo.py": [(10, 25)], "src/bar.py": [(1, 10)]},
         )
 
         trace = store.get_trace("abc123def456")
@@ -69,7 +69,7 @@ class TestTraceStorage:
         assert trace.conversation_url == "/path/to/transcript.jsonl"
         assert trace.model_id == "anthropic/claude-opus-4-5-20251101"
         assert trace.session_id == "test-session-123"
-        assert trace.files == ["src/foo.py", "src/bar.py"]
+        assert set(trace.files) == {"src/foo.py", "src/bar.py"}
 
     def test_add_trace_minimal(self, store: SQLiteStore) -> None:
         """Test adding trace with minimal required fields."""
@@ -81,7 +81,8 @@ class TestTraceStorage:
         trace = store.get_trace("minimal123")
         assert trace is not None
         assert trace.commit_sha == "minimal123"
-        assert trace.conversation_url == "/path/to/conv.jsonl"
+        # With no file_ranges, conversation_url won't be in files_json
+        assert trace.conversation_url == ""
         assert trace.model_id is None
         assert trace.session_id is None
         assert trace.files == []
@@ -97,17 +98,17 @@ class TestTraceStorage:
         store.add_trace(
             commit_sha="commit1",
             conversation_url="/path/to/conv1.jsonl",
-            files=["a.py"],
+            file_ranges={"a.py": [(1, 10)]},
         )
         store.add_trace(
             commit_sha="commit2",
             conversation_url="/path/to/conv1.jsonl",
-            files=["b.py"],
+            file_ranges={"b.py": [(1, 10)]},
         )
         store.add_trace(
             commit_sha="commit3",
             conversation_url="/path/to/conv2.jsonl",
-            files=["c.py"],
+            file_ranges={"c.py": [(1, 10)]},
         )
 
         traces = store.list_traces_for_conversation("/path/to/conv1.jsonl")
@@ -124,12 +125,12 @@ class TestTraceStorage:
         store.add_trace(
             commit_sha="abc123",
             conversation_url="/old/path.jsonl",
-            files=["old.py"],
+            file_ranges={"old.py": [(1, 10)]},
         )
         store.add_trace(
             commit_sha="abc123",
             conversation_url="/new/path.jsonl",
-            files=["new.py"],
+            file_ranges={"new.py": [(1, 10)]},
         )
 
         trace = store.get_trace("abc123")
@@ -313,14 +314,38 @@ class TestTraceRecord:
 
         from theo.storage.sqlite_store import TraceRecord
 
+        # Spec-compliant files_json with conversations containing ranges
+        files_spec = [
+            {
+                "path": "a.py",
+                "conversations": [
+                    {
+                        "ranges": [{"start_line": 1, "end_line": 10}],
+                        "url": "/path/to/conv.jsonl",
+                        "contributor": {"type": "ai", "model_id": "claude-opus-4-5-20251101"},
+                    }
+                ],
+            },
+            {
+                "path": "b.py",
+                "conversations": [
+                    {
+                        "ranges": [{"start_line": 1, "end_line": 5}],
+                        "url": "/path/to/conv.jsonl",
+                        "contributor": {"type": "ai", "model_id": "claude-opus-4-5-20251101"},
+                    }
+                ],
+            },
+        ]
+
         trace = TraceRecord(
             id="abc123uuid",
             version="0.1",
             timestamp="2024-01-15T10:30:00+00:00",
-            files_json=json.dumps([{"path": "a.py"}, {"path": "b.py"}]),
-            vcs_json=None,
-            tool_json=json.dumps({"model_id": "claude-opus-4-5-20251101"}),
-            metadata_json=json.dumps({"conversation_url": "/path/to/conv.jsonl"}),
+            files_json=json.dumps(files_spec),
+            vcs_json=json.dumps({"type": "git", "revision": "abc123"}),
+            tool_json=json.dumps({"name": "claude-code", "version": "1.0"}),
+            metadata_json=None,
             commit_sha="abc123",
             session_id="session-123",
         )
@@ -331,7 +356,7 @@ class TestTraceRecord:
         assert trace.commit_sha == "abc123"
         assert trace.session_id == "session-123"
         # Test backward compatibility properties
-        assert trace.files == ["a.py", "b.py"]
+        assert set(trace.files) == {"a.py", "b.py"}
         assert trace.conversation_url == "/path/to/conv.jsonl"
         assert trace.model_id == "claude-opus-4-5-20251101"
         assert trace.created_at > 0  # Parsed from RFC 3339
