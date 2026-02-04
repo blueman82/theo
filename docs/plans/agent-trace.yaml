@@ -79,8 +79,8 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_sqlite_store.py -v -k 'trace or schema'"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && uv run pytest tests/test_sqlite_store.py -v -k 'trace or schema'"
 
       runtime_metadata:
         dependency_checks:
@@ -159,7 +159,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -182,8 +182,8 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_sqlite_store.py -v -k trace"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && uv run pytest tests/test_sqlite_store.py -v -k trace"
 
       runtime_metadata:
         dependency_checks:
@@ -334,7 +334,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -357,8 +357,8 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_daemon.py -v"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && uv run pytest tests/test_daemon.py -v"
 
       runtime_metadata:
         dependency_checks:
@@ -453,7 +453,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -475,7 +475,7 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
 
       runtime_metadata:
         dependency_checks:
@@ -557,7 +557,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -582,8 +582,8 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && python hooks/theo-commit-hook.py --help || true"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && python hooks/theo-commit-hook.py --help || true"
 
       runtime_metadata:
         dependency_checks:
@@ -779,7 +779,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -802,8 +802,8 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && uv run python -m theo --help"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && uv run python -m theo --help"
 
       runtime_metadata:
         dependency_checks:
@@ -918,7 +918,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -940,8 +940,8 @@ plan:
         - "./check --fix passes"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_mcp_server.py -v -k trace"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && uv run pytest tests/test_mcp_server.py -v -k trace"
 
       runtime_metadata:
         dependency_checks:
@@ -1062,7 +1062,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
@@ -1086,8 +1086,8 @@ plan:
         - "All tests pass with uv run pytest tests/test_agent_trace.py -v"
 
       test_commands:
-        - "cd /Users/harrison/Documents/Github/theo && ./check --fix"
-        - "cd /Users/harrison/Documents/Github/theo && uv run pytest tests/test_agent_trace.py -v"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
+        - "cd /Users/harrison/Documents/Github/theo-agent-trace && uv run pytest tests/test_agent_trace.py -v"
 
       runtime_metadata:
         dependency_checks:
@@ -1245,7 +1245,7 @@ plan:
       code_quality:
         python:
           full_quality_pipeline:
-            command: "cd /Users/harrison/Documents/Github/theo && ./check --fix"
+            command: "cd /Users/harrison/Documents/Github/theo-agent-trace && ./check --fix"
             exit_on_failure: true
 
       commit:
