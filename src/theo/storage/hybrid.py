@@ -552,9 +552,7 @@ class HybridStore:
         offset: int = 0,
     ) -> list[dict[str, Any]]:
         """Find memories with no edges (neither source nor target)."""
-        results = self._sqlite.find_orphan_memories(
-            namespace=namespace, limit=limit, offset=offset
-        )
+        results = self._sqlite.find_orphan_memories(namespace=namespace, limit=limit, offset=offset)
         return [
             {
                 "id": r["id"],
