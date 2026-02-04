@@ -28,7 +28,6 @@ as it corrupts JSON-RPC messages. All logging goes to stderr.
 import argparse
 import logging
 import os
-import shutil
 import signal
 import subprocess
 import sys
