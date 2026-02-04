@@ -98,33 +98,28 @@ def parse_arguments() -> argparse.Namespace:
     Raises:
         SystemExit: If any required environment variable is not set.
     """
+    # Check for trace subcommand BEFORE argparse to avoid parse_known_args issues
+    # (argparse would interpret unknown flags' values as positional subcommand args)
+    if len(sys.argv) > 1 and sys.argv[1] == "trace":
+        parser = argparse.ArgumentParser(
+            description="Theo MCP server for unified AI memory and document retrieval",
+        )
+        subparsers = parser.add_subparsers(dest="subcommand")
+        trace_parser = subparsers.add_parser("trace", help="Agent Trace commands")
+        trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
+        trace_subparsers.add_parser("init", help="Install Agent Trace git hook")
+        trace_query_parser = trace_subparsers.add_parser("query", help="Query AI attribution for code")
+        trace_query_parser.add_argument("file", type=str, help="File to query")
+        trace_query_parser.add_argument(
+            "--line", "-L", type=int, default=None, help="Line number to query"
+        )
+        return parser.parse_args()
+
+    # MCP server mode - parse all arguments
     parser = argparse.ArgumentParser(
         description="Theo MCP server for unified AI memory and document retrieval",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-
-    # Add subparsers for trace commands
-    subparsers = parser.add_subparsers(dest="subcommand")
-
-    # trace subcommand group
-    trace_parser = subparsers.add_parser("trace", help="Agent Trace commands")
-    trace_subparsers = trace_parser.add_subparsers(dest="trace_command")
-
-    # trace init
-    trace_subparsers.add_parser("init", help="Install Agent Trace git hook")
-
-    # trace query
-    trace_query_parser = trace_subparsers.add_parser("query", help="Query AI attribution for code")
-    trace_query_parser.add_argument("file", type=str, help="File to query")
-    trace_query_parser.add_argument(
-        "--line", "-L", type=int, default=None, help="Line number to query"
-    )
-
-    # Check if we're running a trace subcommand (don't require .env)
-    # Pre-parse to check for trace command before requiring env vars
-    pre_args, _ = parser.parse_known_args()
-    if pre_args.subcommand == "trace":
-        return parser.parse_args()
 
     # Direct tool call mode (for daemon subprocess calls)
     parser.add_argument(
