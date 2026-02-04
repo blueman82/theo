@@ -305,41 +305,56 @@ class TestDaemonProtocol:
 
 
 class TestTraceRecord:
-    """Tests for TraceRecord dataclass."""
+    """Tests for TraceRecord dataclass (agent-trace.dev spec compliant)."""
 
     def test_trace_record_fields(self) -> None:
-        """Test TraceRecord has correct fields."""
+        """Test TraceRecord has correct spec fields."""
+        import json
+
         from theo.storage.sqlite_store import TraceRecord
 
         trace = TraceRecord(
+            id="abc123uuid",
+            version="0.1",
+            timestamp="2024-01-15T10:30:00+00:00",
+            files_json=json.dumps([{"path": "a.py"}, {"path": "b.py"}]),
+            vcs_json=None,
+            tool_json=json.dumps({"model_id": "claude-opus-4-5-20251101"}),
+            metadata_json=json.dumps({"conversation_url": "/path/to/conv.jsonl"}),
             commit_sha="abc123",
-            conversation_url="/path/to/conv.jsonl",
-            model_id="claude-opus-4-5-20251101",
             session_id="session-123",
-            files=["a.py", "b.py"],
-            created_at=1234567890.0,
         )
 
+        assert trace.id == "abc123uuid"
+        assert trace.version == "0.1"
+        assert trace.timestamp == "2024-01-15T10:30:00+00:00"
         assert trace.commit_sha == "abc123"
+        assert trace.session_id == "session-123"
+        # Test backward compatibility properties
+        assert trace.files == ["a.py", "b.py"]
         assert trace.conversation_url == "/path/to/conv.jsonl"
         assert trace.model_id == "claude-opus-4-5-20251101"
-        assert trace.session_id == "session-123"
-        assert trace.files == ["a.py", "b.py"]
-        assert trace.created_at == 1234567890.0
+        assert trace.created_at > 0  # Parsed from RFC 3339
 
     def test_trace_record_optional_fields(self) -> None:
         """Test TraceRecord with optional fields as None."""
+        import json
+
         from theo.storage.sqlite_store import TraceRecord
 
         trace = TraceRecord(
+            id="minimal123uuid",
+            version="0.1",
+            timestamp="2024-01-15T10:30:00+00:00",
+            files_json=json.dumps([]),
+            vcs_json=None,
+            tool_json=None,
+            metadata_json=None,
             commit_sha="abc123",
-            conversation_url="/path/to/conv.jsonl",
-            model_id=None,
             session_id=None,
-            files=[],
-            created_at=1234567890.0,
         )
 
         assert trace.model_id is None
         assert trace.session_id is None
         assert trace.files == []
+        assert trace.conversation_url == ""

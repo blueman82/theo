@@ -27,6 +27,7 @@ import sqlite3
 import struct
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 from uuid import uuid4
@@ -57,14 +58,58 @@ class SearchResult:
 
 @dataclass
 class TraceRecord:
-    """Record of AI attribution for a git commit."""
+    """Record of AI attribution - agent-trace.dev spec compliant."""
 
-    commit_sha: str
-    conversation_url: str
-    model_id: str | None
-    session_id: str | None
-    files: list[str]
-    created_at: float
+    id: str  # UUID
+    version: str  # e.g., "0.1"
+    timestamp: str  # RFC 3339
+    files_json: str  # JSON array per spec
+    vcs_json: str | None  # Optional {type, revision}
+    tool_json: str | None  # Optional {name, version}
+    metadata_json: str | None  # Optional vendor data
+    commit_sha: str | None  # Our addition for git lookup
+    session_id: str | None  # Our addition for session link
+
+    # Convenience properties for backward compatibility
+    @property
+    def files(self) -> list[str]:
+        """Extract file paths from files_json for backward compatibility."""
+        try:
+            files_data = json.loads(self.files_json)
+            return [f.get("path", "") if isinstance(f, dict) else str(f) for f in files_data]
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    @property
+    def conversation_url(self) -> str:
+        """Extract conversation URL from metadata_json for backward compatibility."""
+        if self.metadata_json:
+            try:
+                metadata = json.loads(self.metadata_json)
+                return metadata.get("conversation_url", "")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return ""
+
+    @property
+    def model_id(self) -> str | None:
+        """Extract model ID from tool_json for backward compatibility."""
+        if self.tool_json:
+            try:
+                tool = json.loads(self.tool_json)
+                return tool.get("model_id")
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return None
+
+    @property
+    def created_at(self) -> float:
+        """Convert RFC 3339 timestamp to Unix float for backward compatibility."""
+        try:
+            dt = datetime.fromisoformat(self.timestamp.replace("Z", "+00:00"))
+            return dt.timestamp()
+        except (ValueError, AttributeError):
+            return 0.0
 
 
 # MCP servers must never write to stdout (corrupts JSON-RPC)
@@ -400,22 +445,33 @@ class SQLiteStore:
         )
 
         # =====================================================================
-        # Agent Trace Tables (schema v4)
+        # Agent Trace Tables (schema v4 -> v5: agent-trace.dev spec)
         # =====================================================================
 
-        # Traces table for commit attribution
-        cursor.execute(
+        # Check if old schema exists and migrate
+        cursor.execute("PRAGMA table_info(traces)")
+        columns = {row[1] for row in cursor.fetchall()}
+
+        if "commit_sha" in columns and "id" not in columns and columns:
+            # Old schema - need to migrate to agent-trace.dev spec
+            self._migrate_traces_to_spec(cursor)
+        else:
+            # Create new spec-compliant traces table
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS traces (
+                    id TEXT PRIMARY KEY,
+                    version TEXT NOT NULL DEFAULT '0.1',
+                    timestamp TEXT NOT NULL,
+                    files_json TEXT NOT NULL,
+                    vcs_json TEXT,
+                    tool_json TEXT,
+                    metadata_json TEXT,
+                    commit_sha TEXT UNIQUE,
+                    session_id TEXT
+                )
             """
-            CREATE TABLE IF NOT EXISTS traces (
-                commit_sha TEXT PRIMARY KEY,
-                conversation_url TEXT NOT NULL,
-                model_id TEXT,
-                session_id TEXT,
-                files TEXT,
-                created_at REAL NOT NULL
             )
-        """
-        )
 
         cursor.execute(
             """
@@ -426,8 +482,8 @@ class SQLiteStore:
 
         cursor.execute(
             """
-            CREATE INDEX IF NOT EXISTS idx_traces_conversation
-            ON traces(conversation_url)
+            CREATE INDEX IF NOT EXISTS idx_traces_commit
+            ON traces(commit_sha)
         """
         )
 
@@ -460,8 +516,95 @@ class SQLiteStore:
         """,
             (time.time(),),
         )
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO schema_version (version, applied_at)
+            VALUES (5, ?)
+        """,
+            (time.time(),),
+        )
 
         self._conn.commit()
+
+    def _migrate_traces_to_spec(self, cursor: sqlite3.Cursor) -> None:
+        """Migrate old traces table to agent-trace.dev spec format."""
+        # Rename old table
+        cursor.execute("ALTER TABLE traces RENAME TO traces_old")
+
+        # Create new spec-compliant table
+        cursor.execute(
+            """
+            CREATE TABLE traces (
+                id TEXT PRIMARY KEY,
+                version TEXT NOT NULL DEFAULT '0.1',
+                timestamp TEXT NOT NULL,
+                files_json TEXT NOT NULL,
+                vcs_json TEXT,
+                tool_json TEXT,
+                metadata_json TEXT,
+                commit_sha TEXT UNIQUE,
+                session_id TEXT
+            )
+        """
+        )
+
+        # Migrate data from old table
+        cursor.execute(
+            """
+            SELECT commit_sha, conversation_url, model_id, session_id, files, created_at
+            FROM traces_old
+            """
+        )
+        for row in cursor.fetchall():
+            old_sha = row[0]
+            old_conv_url = row[1]
+            old_model_id = row[2]
+            old_session_id = row[3]
+            old_files = row[4]
+            old_created_at = row[5]
+
+            # Generate new UUID
+            new_id = uuid4().hex
+
+            # Convert Unix timestamp to RFC 3339
+            ts = datetime.fromtimestamp(old_created_at, tz=timezone.utc).isoformat()
+
+            # Convert files to spec format (array of file objects)
+            try:
+                file_list = json.loads(old_files) if old_files else []
+            except (json.JSONDecodeError, TypeError):
+                file_list = []
+            files_spec = [{"path": f} for f in file_list]
+
+            # Build tool_json with model_id
+            tool_json = json.dumps({"model_id": old_model_id}) if old_model_id else None
+
+            # Build metadata_json with conversation_url
+            metadata_json = json.dumps({"conversation_url": old_conv_url}) if old_conv_url else None
+
+            cursor.execute(
+                """
+                INSERT INTO traces (
+                    id, version, timestamp, files_json, vcs_json,
+                    tool_json, metadata_json, commit_sha, session_id
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    new_id,
+                    "0.1",
+                    ts,
+                    json.dumps(files_spec),
+                    None,
+                    tool_json,
+                    metadata_json,
+                    old_sha,
+                    old_session_id,
+                ),
+            )
+
+        # Drop old table
+        cursor.execute("DROP TABLE traces_old")
 
     def close(self) -> None:
         """Close database connection."""
@@ -2042,8 +2185,8 @@ class SQLiteStore:
         model_id: str | None = None,
         session_id: str | None = None,
         files: list[str] | None = None,
-    ) -> None:
-        """Record AI attribution for a git commit.
+    ) -> str:
+        """Record AI attribution for a git commit (agent-trace.dev spec compliant).
 
         Args:
             commit_sha: Git commit SHA
@@ -2052,30 +2195,94 @@ class SQLiteStore:
             session_id: Claude Code session ID
             files: List of files changed in commit
 
+        Returns:
+            Trace ID (UUID)
+
         Raises:
             SQLiteStoreError: If insert fails
         """
         try:
             cursor = self._conn.cursor()
-            cursor.execute(
-                """
-                INSERT OR REPLACE INTO traces
-                (commit_sha, conversation_url, model_id, session_id, files, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    commit_sha,
-                    conversation_url,
-                    model_id,
-                    session_id,
-                    json.dumps(files or []),
-                    time.time(),
-                ),
+
+            # Check if trace already exists for this commit
+            cursor.execute("SELECT id FROM traces WHERE commit_sha = ?", (commit_sha,))
+            existing = cursor.fetchone()
+            trace_id = existing[0] if existing else uuid4().hex
+
+            # Generate RFC 3339 timestamp
+            ts = datetime.now(tz=timezone.utc).isoformat()
+
+            # Convert files to spec format (array of file objects)
+            files_spec = [{"path": f} for f in (files or [])]
+
+            # Build tool_json with model_id
+            tool_json = json.dumps({"model_id": model_id}) if model_id else None
+
+            # Build metadata_json with conversation_url
+            metadata_json = (
+                json.dumps({"conversation_url": conversation_url}) if conversation_url else None
             )
+
+            if existing:
+                cursor.execute(
+                    """
+                    UPDATE traces SET
+                        timestamp = ?,
+                        files_json = ?,
+                        tool_json = ?,
+                        metadata_json = ?,
+                        session_id = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        ts,
+                        json.dumps(files_spec),
+                        tool_json,
+                        metadata_json,
+                        session_id,
+                        trace_id,
+                    ),
+                )
+            else:
+                cursor.execute(
+                    """
+                    INSERT INTO traces (
+                        id, version, timestamp, files_json, vcs_json,
+                        tool_json, metadata_json, commit_sha, session_id
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        trace_id,
+                        "0.1",
+                        ts,
+                        json.dumps(files_spec),
+                        None,
+                        tool_json,
+                        metadata_json,
+                        commit_sha,
+                        session_id,
+                    ),
+                )
             self._conn.commit()
+            return trace_id
         except Exception as e:
             self._conn.rollback()
             raise SQLiteStoreError(f"Failed to add trace: {e}") from e
+
+    def _row_to_trace(self, row: sqlite3.Row) -> TraceRecord:
+        """Convert SQLite row to TraceRecord."""
+        return TraceRecord(
+            id=row["id"],
+            version=row["version"],
+            timestamp=row["timestamp"],
+            files_json=row["files_json"],
+            vcs_json=row["vcs_json"],
+            tool_json=row["tool_json"],
+            metadata_json=row["metadata_json"],
+            commit_sha=row["commit_sha"],
+            session_id=row["session_id"],
+        )
 
     def get_trace(self, commit_sha: str) -> TraceRecord | None:
         """Get trace record for a commit.
@@ -2098,14 +2305,7 @@ class SQLiteStore:
             row = cursor.fetchone()
             if row is None:
                 return None
-            return TraceRecord(
-                commit_sha=row["commit_sha"],
-                conversation_url=row["conversation_url"],
-                model_id=row["model_id"],
-                session_id=row["session_id"],
-                files=json.loads(row["files"]) if row["files"] else [],
-                created_at=row["created_at"],
-            )
+            return self._row_to_trace(row)
         except Exception as e:
             raise SQLiteStoreError(f"Failed to get trace: {e}") from e
 
@@ -2123,20 +2323,15 @@ class SQLiteStore:
         """
         try:
             cursor = self._conn.cursor()
+            # Query metadata_json for conversation_url
             cursor.execute(
-                "SELECT * FROM traces WHERE conversation_url = ? ORDER BY created_at",
+                """
+                SELECT * FROM traces
+                WHERE json_extract(metadata_json, '$.conversation_url') = ?
+                ORDER BY timestamp
+                """,
                 (conversation_url,),
             )
-            return [
-                TraceRecord(
-                    commit_sha=row["commit_sha"],
-                    conversation_url=row["conversation_url"],
-                    model_id=row["model_id"],
-                    session_id=row["session_id"],
-                    files=json.loads(row["files"]) if row["files"] else [],
-                    created_at=row["created_at"],
-                )
-                for row in cursor.fetchall()
-            ]
+            return [self._row_to_trace(row) for row in cursor.fetchall()]
         except Exception as e:
             raise SQLiteStoreError(f"Failed to list traces: {e}") from e
