@@ -881,13 +881,12 @@ def trace_query(file: str, line: int | None = None) -> dict[str, Any]:
         Dictionary with:
         - success: Boolean indicating operation success
         - found: Boolean indicating if attribution was found
+        - trace: Spec-compliant trace object with id, version, timestamp, files, vcs, tool
         - commit: Git commit SHA
-        - conversation_url: Path to conversation transcript (if found)
-        - model_id: AI model identifier (if found)
-        - files: List of files changed in commit (if found)
         - message: Status message (if not found)
         - error: Error message if operation failed
     """
+    import json
     import subprocess
 
     if sqlite_store is None:
@@ -914,10 +913,15 @@ def trace_query(file: str, line: int | None = None) -> dict[str, Any]:
         return {
             "success": True,
             "found": True,
+            "trace": {
+                "id": trace.id,
+                "version": trace.version,
+                "timestamp": trace.timestamp,
+                "files": json.loads(trace.files_json),
+                "vcs": json.loads(trace.vcs_json) if trace.vcs_json else None,
+                "tool": json.loads(trace.tool_json) if trace.tool_json else None,
+            },
             "commit": commit_sha,
-            "conversation_url": trace.conversation_url,
-            "model_id": trace.model_id,
-            "files": trace.files,
         }
     return {
         "success": True,
@@ -940,7 +944,7 @@ def trace_list(conversation_url: str | None = None, limit: int = 20) -> dict[str
     Returns:
         Dictionary with:
         - success: Boolean indicating operation success
-        - traces: List of trace records with commit_sha, conversation_url, model_id, files
+        - traces: List of spec-compliant trace records
         - count: Number of traces returned
         - error: Error message if operation failed
     """
@@ -953,25 +957,31 @@ def trace_list(conversation_url: str | None = None, limit: int = 20) -> dict[str
         trace_records = sqlite_store.list_traces_for_conversation(conversation_url)
         traces = [
             {
+                "id": t.id,
+                "version": t.version,
+                "timestamp": t.timestamp,
+                "files": json_module.loads(t.files_json),
+                "vcs": json_module.loads(t.vcs_json) if t.vcs_json else None,
+                "tool": json_module.loads(t.tool_json) if t.tool_json else None,
                 "commit_sha": t.commit_sha,
-                "conversation_url": t.conversation_url,
-                "model_id": t.model_id,
-                "files": t.files,
             }
             for t in trace_records[:limit]
         ]
     else:
         cursor = sqlite_store._conn.cursor()
         cursor.execute(
-            "SELECT * FROM traces ORDER BY created_at DESC LIMIT ?",
+            "SELECT * FROM traces ORDER BY timestamp DESC LIMIT ?",
             (limit,),
         )
         traces = [
             {
+                "id": row["id"],
+                "version": row["version"],
+                "timestamp": row["timestamp"],
+                "files": json_module.loads(row["files_json"]),
+                "vcs": json_module.loads(row["vcs_json"]) if row["vcs_json"] else None,
+                "tool": json_module.loads(row["tool_json"]) if row["tool_json"] else None,
                 "commit_sha": row["commit_sha"],
-                "conversation_url": row["conversation_url"],
-                "model_id": row["model_id"],
-                "files": json_module.loads(row["files"]) if row["files"] else [],
             }
             for row in cursor.fetchall()
         ]

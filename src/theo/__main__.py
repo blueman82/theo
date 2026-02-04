@@ -415,6 +415,8 @@ def trace_init() -> None:
 
 def trace_query(file: str, line: int | None = None) -> None:
     """Query AI attribution for code."""
+    import json
+
     blame_cmd = ["git", "blame", "--porcelain"]
     if line is not None:
         blame_cmd.extend(["-L", f"{line},{line}"])
@@ -441,10 +443,15 @@ def trace_query(file: str, line: int | None = None) -> None:
     store.close()
 
     if trace:
-        print("AI Attribution Found:")
-        print(f"  Conversation: {trace.conversation_url}")
-        print(f"  Model: {trace.model_id or 'unknown'}")
-        print(f"  Commit: {commit_sha[:8]}")
+        files = json.loads(trace.files_json)
+        print(f"AI Attribution Found (spec v{trace.version}):")
+        print(f"  Trace ID: {trace.id}")
+        print(f"  Timestamp: {trace.timestamp}")
+        for f in files:
+            print(f"  File: {f['path']}")
+            for conv in f.get("conversations", []):
+                for r in conv.get("ranges", []):
+                    print(f"    Lines {r['start_line']}-{r['end_line']}")
     else:
         print("No AI attribution found for this code")
 
