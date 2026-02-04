@@ -902,17 +902,17 @@ plan:
       implementation:
         approach: "Add trace subcommand group to existing CLI"
         key_points:
-          - point: "trace_init"
+          - point: "'theo trace init' command"
             details: "Copies hook to .git/hooks/post-commit and chmod +x"
             reference: "src/theo/__main__.py"
-          - point: "trace_query"
+          - point: "'theo trace query' command"
             details: "git blame --porcelain, extract SHA, lookup in SQLiteStore"
             reference: "src/theo/__main__.py"
-          - point: "git blame"
+          - point: "Query runs git blame"
             details: "Uses --porcelain format for machine parsing"
             reference: "src/theo/__main__.py:trace_query"
-          - point: "error handling"
-            details: "Clear messages for non-git repos and blame failures"
+          - point: "conversation URL if found"
+            details: "Returns conversation URL or 'No AI attribution' message"
             reference: "src/theo/__main__.py"
 
       code_quality:
