@@ -387,6 +387,31 @@ class SQLiteStore:
         """
         )
 
+        # =====================================================================
+        # Agent Trace Tables (schema v4)
+        # =====================================================================
+
+        # Traces table for commit attribution
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS traces (
+                commit_sha TEXT PRIMARY KEY,
+                conversation_url TEXT NOT NULL,
+                model_id TEXT,
+                session_id TEXT,
+                files TEXT,
+                created_at REAL NOT NULL
+            )
+        """
+        )
+
+        cursor.execute(
+            """
+            CREATE INDEX IF NOT EXISTS idx_traces_session
+            ON traces(session_id)
+        """
+        )
+
         # Record schema versions
         cursor.execute(
             """
@@ -406,6 +431,13 @@ class SQLiteStore:
             """
             INSERT OR IGNORE INTO schema_version (version, applied_at)
             VALUES (3, ?)
+        """,
+            (time.time(),),
+        )
+        cursor.execute(
+            """
+            INSERT OR IGNORE INTO schema_version (version, applied_at)
+            VALUES (4, ?)
         """,
             (time.time(),),
         )
@@ -1392,7 +1424,9 @@ class SQLiteStore:
                 conditions.append("memory_type = ?")
                 knn_params.append(where["memory_type"])
             if conditions:
-                knn_filter = f" AND id IN (SELECT id FROM memories WHERE {' AND '.join(conditions)})"
+                knn_filter = (
+                    f" AND id IN (SELECT id FROM memories WHERE {' AND '.join(conditions)})"
+                )
 
         # sqlite-vec KNN search with cosine distance and pre-filtering
         query = f"""
@@ -1454,10 +1488,14 @@ class SQLiteStore:
 
             except sqlite3.OperationalError as e:
                 last_error = e
-                logger.warning(f"sqlite-vec search failed (attempt {attempt + 1}, limit={limit}): {e}")
+                logger.warning(
+                    f"sqlite-vec search failed (attempt {attempt + 1}, limit={limit}): {e}"
+                )
                 continue
 
-        raise SQLiteStoreError(f"Failed to search vectors after retries: {last_error}") from last_error
+        raise SQLiteStoreError(
+            f"Failed to search vectors after retries: {last_error}"
+        ) from last_error
 
     def search_fts(
         self,
