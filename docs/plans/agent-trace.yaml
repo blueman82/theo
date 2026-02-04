@@ -49,7 +49,7 @@ plan:
     feature_name: "Agent Trace - AI Code Attribution"
     created: "2026-02-04"
     target: "Track AI code attribution via commit annotation, linking commits to Claude conversations"
-    project_root: "/Users/harrison/Documents/Github/theo"
+    project_root: "/Users/harrison/Documents/Github/theo-agent-trace"
 
   context:
     framework: "Python 3.11, asyncio, Unix sockets"
