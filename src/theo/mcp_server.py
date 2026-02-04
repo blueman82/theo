@@ -44,6 +44,7 @@ indexing_tools: Optional[Any] = None
 query_tools: Optional[Any] = None
 memory_tools: Optional[Any] = None
 management_tools: Optional[Any] = None
+sqlite_store: Optional[Any] = None
 
 
 def set_tool_instances(
@@ -51,6 +52,7 @@ def set_tool_instances(
     query: Any,
     memory: Any,
     management: Any,
+    store: Optional[Any] = None,
 ) -> None:
     """Set global tool instances after initialization.
 
@@ -61,12 +63,14 @@ def set_tool_instances(
         query: QueryTools instance
         memory: MemoryTools instance
         management: ManagementTools instance
+        store: SQLiteStore instance for trace operations
     """
-    global indexing_tools, query_tools, memory_tools, management_tools
+    global indexing_tools, query_tools, memory_tools, management_tools, sqlite_store
     indexing_tools = indexing
     query_tools = query
     memory_tools = memory
     management_tools = management
+    sqlite_store = store
 
 
 # ==============================================================================
@@ -855,3 +859,135 @@ async def get_index_stats() -> dict[str, Any]:
         return {"success": False, "error": "Server not initialized"}
 
     return await management_tools.get_stats()
+
+
+# ==============================================================================
+# Agent Trace Tools
+# ==============================================================================
+
+
+@mcp.tool()
+def trace_query(file: str, line: int | None = None) -> dict[str, Any]:
+    """Query AI attribution for code in a file.
+
+    Uses git blame to find the commit responsible for the code, then looks up
+    any recorded AI attribution for that commit.
+
+    Args:
+        file: Path to file to query
+        line: Optional line number to query specific line
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating operation success
+        - found: Boolean indicating if attribution was found
+        - trace: Spec-compliant trace object with id, version, timestamp, files, vcs, tool
+        - commit: Git commit SHA
+        - message: Status message (if not found)
+        - error: Error message if operation failed
+    """
+    import json
+    import subprocess
+
+    if sqlite_store is None:
+        return {"success": False, "error": "Server not initialized"}
+
+    blame_cmd = ["git", "blame", "--porcelain"]
+    if line is not None:
+        blame_cmd.extend(["-L", f"{line},{line}"])
+    blame_cmd.append(file)
+
+    try:
+        result = subprocess.run(blame_cmd, capture_output=True, text=True, check=True)
+    except subprocess.CalledProcessError as e:
+        return {"success": False, "error": f"Failed to run git blame: {e.stderr}"}
+
+    lines = result.stdout.strip().split("\n")
+    if not lines:
+        return {"success": False, "error": "No blame output"}
+
+    commit_sha = lines[0].split()[0][:40]
+
+    trace = sqlite_store.get_trace(commit_sha)
+    if trace:
+        return {
+            "success": True,
+            "found": True,
+            "trace": {
+                "id": trace.id,
+                "version": trace.version,
+                "timestamp": trace.timestamp,
+                "files": json.loads(trace.files_json),
+                "vcs": json.loads(trace.vcs_json) if trace.vcs_json else None,
+                "tool": json.loads(trace.tool_json) if trace.tool_json else None,
+            },
+            "commit": commit_sha,
+        }
+    return {
+        "success": True,
+        "found": False,
+        "commit": commit_sha,
+        "message": "No AI attribution found",
+    }
+
+
+@mcp.tool()
+def trace_list(conversation_url: str | None = None, limit: int = 20) -> dict[str, Any]:
+    """List recorded traces.
+
+    Lists AI attribution records, optionally filtered by conversation URL.
+
+    Args:
+        conversation_url: Filter by conversation transcript path (optional)
+        limit: Maximum traces to return (default: 20)
+
+    Returns:
+        Dictionary with:
+        - success: Boolean indicating operation success
+        - traces: List of spec-compliant trace records
+        - count: Number of traces returned
+        - error: Error message if operation failed
+    """
+    import json as json_module
+
+    if sqlite_store is None:
+        return {"success": False, "error": "Server not initialized"}
+
+    if conversation_url:
+        trace_records = sqlite_store.list_traces_for_conversation(conversation_url)
+        traces = [
+            {
+                "id": t.id,
+                "version": t.version,
+                "timestamp": t.timestamp,
+                "files": json_module.loads(t.files_json),
+                "vcs": json_module.loads(t.vcs_json) if t.vcs_json else None,
+                "tool": json_module.loads(t.tool_json) if t.tool_json else None,
+                "commit_sha": t.commit_sha,
+            }
+            for t in trace_records[:limit]
+        ]
+    else:
+        cursor = sqlite_store._conn.cursor()
+        cursor.execute(
+            "SELECT * FROM traces ORDER BY timestamp DESC LIMIT ?",
+            (limit,),
+        )
+        traces = [
+            {
+                "id": row["id"],
+                "version": row["version"],
+                "timestamp": row["timestamp"],
+                "files": json_module.loads(row["files_json"]),
+                "vcs": json_module.loads(row["vcs_json"]) if row["vcs_json"] else None,
+                "tool": json_module.loads(row["tool_json"]) if row["tool_json"] else None,
+                "commit_sha": row["commit_sha"],
+            }
+            for row in cursor.fetchall()
+        ]
+
+    return {
+        "success": True,
+        "traces": traces,
+        "count": len(traces),
+    }

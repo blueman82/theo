@@ -1,0 +1,79 @@
+#!/bin/bash
+#
+# worktree-add - Create a git worktree with all build artifacts symlinked
+#
+# Usage: ./worktree-add <path> <branch>
+# Example: ./worktree-add ../theo-feature feature/my-feature
+#
+
+set -e
+
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# Get the main repo root (where this script lives)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+MAIN_REPO="$SCRIPT_DIR"
+
+if [ $# -lt 2 ]; then
+    echo -e "${RED}Usage: ./worktree-add <path> <branch>${NC}"
+    echo ""
+    echo "Examples:"
+    echo "  ./worktree-add ../theo-feature feature/my-feature"
+    echo "  ./worktree-add /tmp/theo-test feature/test-branch"
+    exit 1
+fi
+
+WORKTREE_PATH="$1"
+BRANCH="$2"
+
+echo -e "${BLUE}[INFO]${NC} Creating worktree at: $WORKTREE_PATH"
+echo -e "${BLUE}[INFO]${NC} Branch: $BRANCH"
+
+# Create the worktree
+# Find git root dynamically
+GIT_ROOT="$(cd "$MAIN_REPO" && git rev-parse --show-toplevel)"
+cd "$GIT_ROOT"
+git worktree add "$WORKTREE_PATH" -b "$BRANCH" 2>/dev/null || git worktree add "$WORKTREE_PATH" "$BRANCH"
+
+# Resolve the absolute path of the new worktree
+WORKTREE_ABS="$(cd "$WORKTREE_PATH" && pwd)"
+
+echo -e "${BLUE}[INFO]${NC} Setting up symlinks for build artifacts..."
+
+# Symlink Python venv (uv-managed)
+if [ -d "$MAIN_REPO/.venv" ]; then
+    ln -sf "$MAIN_REPO/.venv" "$WORKTREE_ABS/.venv"
+    echo -e "${GREEN}[SUCCESS]${NC} Symlinked .venv"
+else
+    echo -e "${RED}[WARN]${NC} No .venv found in main repo - run 'uv sync' in main repo first"
+fi
+
+# Symlink mypy cache (speeds up type checking)
+if [ -d "$MAIN_REPO/.mypy_cache" ]; then
+    ln -sf "$MAIN_REPO/.mypy_cache" "$WORKTREE_ABS/.mypy_cache"
+    echo -e "${GREEN}[SUCCESS]${NC} Symlinked .mypy_cache"
+fi
+
+# Symlink ruff cache (speeds up linting)
+if [ -d "$MAIN_REPO/.ruff_cache" ]; then
+    ln -sf "$MAIN_REPO/.ruff_cache" "$WORKTREE_ABS/.ruff_cache"
+    echo -e "${GREEN}[SUCCESS]${NC} Symlinked .ruff_cache"
+fi
+
+# Symlink pytest cache
+if [ -d "$MAIN_REPO/.pytest_cache" ]; then
+    ln -sf "$MAIN_REPO/.pytest_cache" "$WORKTREE_ABS/.pytest_cache"
+    echo -e "${GREEN}[SUCCESS]${NC} Symlinked .pytest_cache"
+fi
+
+echo ""
+echo -e "${GREEN}[SUCCESS]${NC} Worktree ready at: $WORKTREE_ABS"
+echo ""
+echo "Next steps:"
+echo "  cd $WORKTREE_ABS"
+echo "  ./check                    # Verify lint/tests pass"
+echo "  uv run python -m theo      # Run the MCP server"

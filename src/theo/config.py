@@ -70,9 +70,7 @@ class TheoSettings(BaseSettings):
     default_token_budget: int = Field(description="Default token budget for context generation")
 
     # Transcription configuration (required)
-    whisper_model: str = Field(
-        description="MLX Whisper model for speech-to-text transcription"
-    )
+    whisper_model: str = Field(description="MLX Whisper model for speech-to-text transcription")
 
     # TTS configuration (optional, with defaults)
     tts_voice: str = Field(default="tara", description="Default TTS voice for playback")
@@ -83,6 +81,12 @@ class TheoSettings(BaseSettings):
     audio_path: Path = Field(
         default=Path.home() / ".theo" / "audio",
         description="Directory for storing audio recordings",
+    )
+
+    # Agent Trace configuration
+    trace_enabled: bool = Field(default=True, description="Enable AI code attribution tracking")
+    trace_git_notes: bool = Field(
+        default=True, description="Write traces to git notes for portability"
     )
 
     def get_sqlite_path(self) -> Path:

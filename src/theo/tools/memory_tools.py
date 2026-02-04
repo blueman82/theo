@@ -711,7 +711,7 @@ class MemoryTools:
                         "id": result.id,
                         "content": result.content,
                         "content_hash": None,  # Not returned by search_hybrid
-                        "type": result.memory_type,
+                        "memory_type": result.memory_type,
                         "namespace": result.namespace,
                         "importance": result.importance,
                         "confidence": result.confidence,
@@ -752,7 +752,9 @@ class MemoryTools:
                                         {
                                             "id": connected_id,
                                             "content": connected_mem.get("content", ""),
-                                            "type": connected_mem.get("memory_type", "memory"),
+                                            "memory_type": connected_mem.get(
+                                                "memory_type", "memory"
+                                            ),
                                             "namespace": connected_mem.get("namespace", ""),
                                             "importance": connected_mem.get("importance", 0.5),
                                             "confidence": connected_mem.get("confidence", 0.5),
@@ -1046,7 +1048,7 @@ class MemoryTools:
                         {
                             "id": doc["id"],
                             "content": doc["content"],
-                            "type": doc["memory_type"],
+                            "memory_type": doc["memory_type"],
                             "importance": doc["importance"],
                             "confidence": doc["confidence"],
                             "namespace": doc["namespace"],
@@ -1063,7 +1065,7 @@ class MemoryTools:
             total_tokens = 0
             for mem in memories:
                 conf = mem.get("confidence", 0.3)
-                mem_text = f"- **{mem['type']}** (confidence: {conf:.2f}): "
+                mem_text = f"- **{mem['memory_type']}** (confidence: {conf:.2f}): "
                 mem_text += mem["content"]
                 mem_tokens = len(mem_text) // 4
 
@@ -1601,7 +1603,7 @@ class MemoryTools:
                     {
                         "id": n.id,
                         "content_preview": n.content_preview,
-                        "type": n.memory_type,
+                        "memory_type": n.memory_type,
                         "confidence": n.confidence,
                         "importance": n.importance,
                     }
@@ -1732,7 +1734,7 @@ class MemoryTools:
                     {
                         "id": doc["id"],
                         "content": doc["content"],
-                        "type": doc["memory_type"],
+                        "memory_type": doc["memory_type"],
                         "namespace": doc["namespace"],
                         "importance": doc["importance"],
                         "confidence": doc["confidence"],
