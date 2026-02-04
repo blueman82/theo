@@ -201,7 +201,7 @@ class HybridStore:
                 return {
                     "id": result["id"],
                     "content": result["content"],
-                    "type": result["memory_type"],
+                    "memory_type": result["memory_type"],
                     "namespace": result["namespace"],
                     "importance": result["importance"],
                     "confidence": result["confidence"],
@@ -277,7 +277,7 @@ class HybridStore:
                     {
                         "id": r.id,
                         "content": r.content,
-                        "type": r.memory_type,
+                        "memory_type": r.memory_type,
                         "namespace": r.namespace,
                         "importance": r.importance,
                         "confidence": r.confidence,
@@ -534,7 +534,7 @@ class HybridStore:
                 {
                     "id": r["id"],
                     "content": r["content"],
-                    "type": r["memory_type"],
+                    "memory_type": r["memory_type"],
                     "namespace": r["namespace"],
                     "importance": r["importance"],
                     "confidence": r["confidence"],
@@ -557,7 +557,7 @@ class HybridStore:
             {
                 "id": r["id"],
                 "content": r["content"],
-                "type": r["memory_type"],
+                "memory_type": r["memory_type"],
                 "namespace": r["namespace"],
                 "importance": r["importance"],
                 "confidence": r["confidence"],
