@@ -356,7 +356,7 @@ def commit_file(
 
 
 def parse_diff_ranges(diff: str) -> dict[str, list[tuple[int, int]]]:
-    """Parse git diff output to extract line ranges per file.
+    """Parse git diff output to extract line ranges per file (Agent Trace v0.1).
 
     Parses @@ -old,count +new_start,new_count @@ hunks from unified diff.
 
