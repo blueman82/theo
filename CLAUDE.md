@@ -202,6 +202,38 @@ Settings via environment variables with `THEO_` prefix:
 | THEO_SQLITE_PATH | ~/.theo/theo.db | SQLite database (vectors + metadata) |
 | THEO_LOG_LEVEL | INFO | Logging level |
 
+## Agent Trace (AI Code Attribution)
+
+Theo implements the [agent-trace.dev](https://agent-trace.dev) open standard for AI code attribution.
+
+### How It Works
+
+1. `auto_commit.py` hook captures Write/Edit/MultiEdit operations
+2. After commit, extracts line ranges via `git diff HEAD~1..HEAD --unified=0`
+3. Model ID auto-detected from Claude Code transcript (`~/.claude/projects/<path>/<session>.jsonl`)
+4. Trace stored in SQLite with spec-compliant JSON structure
+
+### CLI Commands
+
+```bash
+# Query attribution for a file/line
+uv run python -m theo trace query <file> [--line N]
+```
+
+### MCP Tools
+
+- `trace_query(file, line)` - Query AI attribution via git blame
+- `trace_list(conversation_url, limit)` - List recorded traces
+
+### Storage Schema
+
+Traces table stores spec-compliant JSON with:
+- `version`, `id`, `timestamp` (required)
+- `files[].conversations[].ranges[]` with `start_line`, `end_line`
+- `vcs.type`, `vcs.revision` (git commit SHA)
+- `tool.name`, `tool.version` (claude-code)
+- `contributor.type`, `contributor.model_id`
+
 ## File Paths and Structure
 
 - Always use `pathlib.Path` objects, not strings

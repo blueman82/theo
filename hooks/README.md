@@ -40,6 +40,11 @@ Claude Code hooks for Theo integration - memory storage, context injection, and 
 | `theo-permissions.py` | Permission management |
 | `theo-subagent.py` | Subagent coordination |
 
+### Agent Trace
+| File | Purpose |
+|------|---------|
+| `auto_commit.py` | Auto-commit + Agent Trace capture (agent-trace.dev spec) |
+
 ## Setup
 
 1. Copy hooks to your Claude Code hooks directory:
@@ -78,5 +83,6 @@ See `docs/architecture.md` for details.
 | `PrePromptSubmit` | `theo-daemon-ctl.py` | Ensure daemon running |
 | `PreToolUse` | `theo-context.py` | Inject relevant context |
 | `PostToolUse` | `theo-capture.py` | Capture for memory |
+| `PostToolUse` | `auto_commit.py` | Auto-commit + Agent Trace (Write/Edit/MultiEdit) |
 | `Stop` | `theo-stop.py` | Prompt memory storage |
 | `Notification` | `theo-notify.py` | System notifications |

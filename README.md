@@ -46,6 +46,12 @@
 - **Text-to-Speech**: Local TTS for voice responses
 - **Memory Integration**: Transcriptions stored as searchable memories
 
+### Agent Trace (AI Code Attribution)
+- **Spec Compliance**: Full [agent-trace.dev](https://agent-trace.dev) v0.1 compliance
+- **Auto-Capture**: Line-level attribution on every commit via Claude Code hooks
+- **Model Detection**: Auto-detects model from session transcript (opus/sonnet/haiku)
+- **Query Tools**: CLI (`theo trace query`) and MCP tools (`trace_query`, `trace_list`)
+
 ### Unified Capabilities
 - **Local Embeddings**: Privacy-first using MLX (Apple Silicon) or Ollama
 - **Daemon Service**: Non-blocking embedding via Unix socket IPC
@@ -247,7 +253,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 
 ## API Reference
 
-Theo exposes 22 MCP tools:
+Theo exposes 24 MCP tools:
 
 ### Document Tools (2)
 - `index_file(file_path, namespace)` - Index a single document
@@ -278,6 +284,10 @@ Theo exposes 22 MCP tools:
 - `delete_file(source_file)` - Delete file's chunks
 - `clear_index(confirm)` - Clear everything (requires confirmation)
 - `get_index_stats()` - Get collection statistics
+
+### Trace Tools (2)
+- `trace_query(file, line)` - Query AI attribution for code via git blame
+- `trace_list(conversation_url, limit)` - List recorded traces
 
 See [docs/API.md](docs/API.md) for complete API specifications.
 
