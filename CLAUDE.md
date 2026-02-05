@@ -9,9 +9,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Core Capabilities
 
-1. **Document Indexing** (from DocVec): Semantic document chunking and retrieval using vector embeddings
-2. **Long-term Memory** (from Recall): Persistent memory storage with validation loops and confidence scoring
-3. **Unified MCP Interface**: Single server exposing both capabilities to MCP-compatible clients
+1. **Document Indexing**: Semantic document chunking and retrieval using vector embeddings
+2. **Long-term Memory**: Persistent memory storage with validation loops and confidence scoring
+3. **MCP Interface**: Single server exposing all capabilities to MCP-compatible clients
 
 ### Design Principles
 
