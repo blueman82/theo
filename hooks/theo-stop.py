@@ -959,15 +959,18 @@ const related = await theo.memory_recall({
   limit: 3
 });
 
+// IMPORTANT: Access via related.data.memories (NOT related.memories)
+const parentId = related.data?.memories?.[0]?.id;
+
 // 2. Store with relates_to for graph connectivity
 await theo.memory_store({
   content: "What happened: task requested, actions taken, outcome",
   memory_type: "session",  // or pattern, decision, preference
   importance: 0.5,
   namespace: "project:name",  // or "global"
-  relates_to: [  // Use IDs from recall results
-    {"target_id": "mem_parent_id", "relation": "relates_to"}
-  ]
+  relates_to: parentId ? [
+    {"target_id": parentId, "relation": "relates_to"}
+  ] : []
 });
 ```
 
