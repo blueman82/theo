@@ -17,7 +17,6 @@ Claude Code hooks for Theo integration - memory storage, context injection, and 
 ### Session Hooks
 | File | Purpose |
 |------|---------|
-| `theo-session-start.py` | Session initialization - loads context |
 | `theo-stop.py` | Session end - prompts for memory storage |
 | `theo_session_state.py` | Session state management |
 
