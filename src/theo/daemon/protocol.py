@@ -60,10 +60,6 @@ class DaemonCommand(str, Enum):
     SEARCH = "search"
     DELETE = "delete"
 
-    # Session tracking for Agent Trace
-    SET_ACTIVE_SESSION = "set_active_session"
-    GET_ACTIVE_SESSION = "get_active_session"
-
 
 class JobStatus(str, Enum):
     """Status of an async embedding job."""
