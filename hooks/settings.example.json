@@ -66,13 +66,6 @@
         "timeout": 10
       }
     ],
-    "SessionStart": [
-      {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-session-start.py",
-        "timeout": 10
-      }
-    ],
     "Notification": [
       {
         "matcher": "idle_prompt|permission_prompt",
