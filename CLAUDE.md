@@ -240,8 +240,3 @@ Traces table stores spec-compliant JSON with:
 - Resolve paths with `.resolve()` for absolute paths
 - Use `Path.exists()`, `Path.is_file()`, `Path.is_dir()` for validation
 
-## Source Repositories
-
-Theo merges code from:
-- **DocVec**: `/Users/harrison/Documents/Github/docvec` - Document indexing
-- **Recall**: `/Users/harrison/Documents/Github/recall` - Long-term memory
