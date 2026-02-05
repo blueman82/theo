@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "theo"
 version = "0.10.0"
-description = "Unified AI memory and document retrieval system - merging DocVec and Recall"
+description = "AI memory and document retrieval system with semantic indexing and validation"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
