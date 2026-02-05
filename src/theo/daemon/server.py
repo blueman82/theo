@@ -290,9 +290,6 @@ class DaemonServer:
             "index": self._handle_index,
             "search": self._handle_search,
             "delete": self._handle_delete,
-            # Session tracking for Agent Trace
-            "set_active_session": self._handle_set_active_session,
-            "get_active_session": self._handle_get_active_session,
         }
 
         handler = handlers.get(request.cmd)
