@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Theo** - A unified AI memory and document retrieval system, merging the capabilities of DocVec (semantic document indexing) and Recall (long-term memory) into a single MCP server.
+**Theo** - AI memory and document retrieval system with semantic indexing, validation loops, and confidence scoring.
 
 ### Core Capabilities
 
