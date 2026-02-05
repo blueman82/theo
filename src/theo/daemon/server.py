@@ -211,7 +211,6 @@ class DaemonServer:
         self._shutdown_event = asyncio.Event()
         self._client_count = 0
         self._start_time: datetime | None = None
-        self._active_session: dict[str, Any] | None = None
 
     async def handle_client(
         self,
