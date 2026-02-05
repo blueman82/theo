@@ -105,7 +105,7 @@ src/theo/
 │       ├── pdf_chunker.py
 │       ├── code_chunker.py
 │       └── text_chunker.py
-├── memory/              # Long-term memory (from Recall)
+├── memory/              # Long-term memory
 │   ├── types.py         # Memory, Edge, MemoryType, RelationType
 │   ├── operations.py    # store, recall, relate, forget, validate
 │   └── validation.py    # Contradiction detection, confidence
