@@ -96,7 +96,7 @@ src/theo/
 ├── __init__.py          # Package entry point with __version__
 ├── __main__.py          # MCP server entry point
 ├── config.py            # Pydantic Settings configuration
-├── indexing/            # Document indexing (from DocVec)
+├── indexing/            # Document indexing
 │   ├── indexer.py       # Core document indexer
 │   ├── batch_processor.py
 │   └── chunking/        # Format-specific chunkers
