@@ -248,6 +248,49 @@ Traces table stores spec-compliant JSON with:
 - `tool.name`, `tool.version` (claude-code)
 - `contributor.type`, `contributor.model_id`
 
+## Claude Code Hooks
+
+Theo provides hooks for Claude Code integration. Install from `hooks/` to `~/.claude/hooks/`.
+
+### Hook Responsibilities
+
+| Hook | Claude Event | Responsibility | Blocking? |
+|------|--------------|----------------|-----------|
+| `theo-daemon-ctl.py` | PrePromptSubmit | Ensure daemon is running | No |
+| `theo-context.py` | SessionStart | Fetch + curate memories → inject session context | No |
+| `theo-prompt.py` | UserPromptSubmit | Search memories by prompt → inject RFC 2119 context | No |
+| `theo-precontext.py` | PreToolUse | Search memories → inject reminders, can modify input | Can modify |
+| `auto_commit.py` | PostToolUse | Auto-commit Write/Edit/MultiEdit + capture Agent Trace | No |
+| `theo-capture.py` | SessionEnd | Summarize session with Ollama → store memories | No (background) |
+| `theo-stop.py` | Stop | Enforce memory storage before allowing stop | Yes |
+
+### Context Injection Flow
+
+Three hooks inject context at different points with increasing specificity:
+
+```
+SessionStart          UserPromptSubmit       PreToolUse
+     │                      │                     │
+     ▼                      ▼                     ▼
+theo-context.py      theo-prompt.py      theo-precontext.py
+     │                      │                     │
+     ▼                      ▼                     ▼
+Curated memories     Prompt-specific      Tool-specific
+(broad context)      memories (targeted)  reminders (precise)
+```
+
+### Supporting Files
+
+| File | Purpose |
+|------|---------|
+| `theo_client.py` | DaemonClient for fast IPC with subprocess fallback |
+| `theo_worker.py` | Background worker for async operations |
+| `theo_batcher.py` | Batch processing for embeddings |
+| `theo_queue.py` | Queue management for async operations |
+| `theo_session_state.py` | Session state tracking |
+| `theo-daemon.py` | Unix socket server (background service) |
+| `theo-daemon-ctl.py` | Daemon lifecycle management |
+
 ## File Paths and Structure
 
 - Always use `pathlib.Path` objects, not strings
