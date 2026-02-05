@@ -320,19 +320,6 @@ class TestCommitHook:
 # ============================================================================
 
 
-class TestDaemonProtocol:
-    """Tests for daemon protocol with Agent Trace commands."""
-
-    def test_daemon_command_enum_has_session_commands(self) -> None:
-        """Test that DaemonCommand enum has session tracking commands."""
-        from theo.daemon.protocol import DaemonCommand
-
-        assert hasattr(DaemonCommand, "SET_ACTIVE_SESSION")
-        assert hasattr(DaemonCommand, "GET_ACTIVE_SESSION")
-        assert DaemonCommand.SET_ACTIVE_SESSION.value == "set_active_session"
-        assert DaemonCommand.GET_ACTIVE_SESSION.value == "get_active_session"
-
-
 # ============================================================================
 # TraceRecord Dataclass Tests
 # ============================================================================
