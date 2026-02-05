@@ -437,6 +437,15 @@ class MemoryTools:
                     "error": f"Invalid memory_type: {memory_type}. Must be one of: {valid_types}",
                 }
 
+            # Reject golden_rule type - must be earned through validation
+            if mem_type == MemoryType.GOLDEN_RULE:
+                return {
+                    "success": False,
+                    "error": "Cannot create memories with type 'golden_rule'. "
+                    "Use 'pattern' or 'decision' instead - memories are promoted to "
+                    "golden_rule automatically when confidence reaches 0.9+",
+                }
+
             # Validate namespace format
             if namespace not in ("default", "global"):
                 if not namespace.startswith("project:"):
