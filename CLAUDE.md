@@ -96,28 +96,42 @@ src/theo/
 ├── __init__.py          # Package entry point with __version__
 ├── __main__.py          # MCP server entry point
 ├── config.py            # Pydantic Settings configuration
-├── indexing/            # Document indexing
-│   ├── indexer.py       # Core document indexer
-│   ├── batch_processor.py
-│   └── chunking/        # Format-specific chunkers
-│       ├── base.py
-│       ├── markdown_chunker.py
-│       ├── pdf_chunker.py
-│       ├── code_chunker.py
-│       └── text_chunker.py
-├── memory/              # Long-term memory
-│   ├── types.py         # Memory, Edge, MemoryType, RelationType
-│   ├── operations.py    # store, recall, relate, forget, validate
-│   └── validation.py    # Contradiction detection, confidence
-├── storage/
-│   ├── sqlite_store.py  # SQLite + sqlite-vec vector storage
-│   ├── types.py         # Storage type definitions
-│   └── hybrid.py        # Coordinated storage layer
-├── embedding/
-│   ├── provider.py      # Abstract embedding provider
-│   ├── factory.py       # Backend selection
+├── constants.py         # Shared constants
+├── mcp_server.py        # FastMCP server with tool registration
+├── chunking/            # Document chunking (format-specific)
+│   ├── base.py          # AbstractChunker interface
+│   ├── code_chunker.py  # AST-based Python chunking
+│   ├── markdown_chunker.py  # Header-aware chunking
+│   ├── pdf_chunker.py   # Page-aware chunking
+│   ├── registry.py      # Extension → chunker mapping
+│   └── text_chunker.py  # Paragraph-based fallback
+├── daemon/              # Non-blocking embedding daemon
+│   ├── client.py        # DaemonClient for IPC
+│   ├── protocol.py      # JSON-RPC protocol definitions
+│   ├── server.py        # Unix socket server
+│   └── worker.py        # Background job processor
+├── embedding/           # Embedding providers
+│   ├── provider.py      # EmbeddingProvider protocol
+│   ├── factory.py       # Backend selection (mlx/ollama)
 │   ├── mlx_provider.py  # MLX embeddings (Apple Silicon)
-│   └── ollama.py        # Ollama fallback
+│   └── ollama_provider.py  # Ollama HTTP client
+├── storage/             # Unified storage layer
+│   ├── sqlite_store.py  # SQLite + sqlite-vec (vectors + metadata)
+│   ├── types.py         # Storage type definitions
+│   └── hybrid.py        # HybridStore coordination layer
+├── tools/               # MCP tool implementations
+│   ├── indexing_tools.py   # index_file, index_directory
+│   ├── query_tools.py      # search, search_with_filters
+│   ├── memory_tools.py     # memory_store, memory_recall, etc.
+│   └── management_tools.py # delete_*, clear_index, stats
+├── types/               # Type definitions
+│   ├── document.py      # Document, Chunk types
+│   ├── memory.py        # MemoryDocument, MemoryType, RelationType
+│   └── search_result.py # SearchResult types
+├── validation/          # Memory validation loop
+│   ├── feedback.py      # Feedback tracking
+│   ├── golden_rules.py  # Golden rule promotion
+│   └── loop.py          # TRY → BREAK → ANALYZE → LEARN
 └── transcription/       # Voice transcription (MLX Whisper)
     ├── __main__.py      # CLI entry point
     ├── audio.py         # Audio capture with silence detection
