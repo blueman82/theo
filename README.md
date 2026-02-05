@@ -253,7 +253,7 @@ See [docs/architecture.md](docs/architecture.md) for detailed architecture docum
 
 ## API Reference
 
-Theo exposes 24 MCP tools:
+Theo exposes 26 MCP tools:
 
 ### Document Tools (2)
 - `index_file(file_path, namespace)` - Index a single document
