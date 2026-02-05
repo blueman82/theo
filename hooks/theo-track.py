@@ -800,50 +800,8 @@ def track_file_activity(
     project_root = find_project_root(file_path) or cwd
     project_name = Path(project_root).name
 
+    # Log file activity (but don't store - that's junk)
     _write_log(log_path, f"{action} | {file_path} | project={project_root}")
-
-    # Use DaemonClient for IPC with automatic subprocess fallback
-    with get_shared_client() as client:
-        import json
-
-        # Store file activity with full content
-        content_parts = [f"File {action}: {file_path}"]
-        if file_type:
-            content_parts[0] += f" ({file_type})"
-
-        # Include actual file content/changes from tool_input
-        if tool_input:
-            # For Write: include content
-            if "content" in tool_input:
-                content_parts.append(f"Content:\n{tool_input['content']}")
-            # For Edit: include old_string and new_string
-            if "old_string" in tool_input:
-                content_parts.append(f"Old:\n{tool_input['old_string']}")
-            if "new_string" in tool_input:
-                content_parts.append(f"New:\n{tool_input['new_string']}")
-            # For other tools: include full input
-            if "content" not in tool_input and "old_string" not in tool_input:
-                content_parts.append(f"Input:\n{json.dumps(tool_input, indent=2)}")
-
-        full_content = "\n\n".join(content_parts)
-
-        result = client.store(
-            content=full_content,
-            namespace=f"project:{project_name}",
-            memory_type="observation",
-            importance=0.3,  # Low importance for routine file operations
-            metadata={
-                "source": "theo-track",
-                "action": action,
-                "file_path": file_path,
-                "file_type": file_type,
-                "session_id": session_id,
-                "project_root": project_root,
-            },
-        )
-
-        if not result.get("success"):
-            _write_log(log_path, f"WARN: {result.get('error', 'unknown error')}")
 
 
 def track_search_activity(
