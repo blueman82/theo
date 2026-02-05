@@ -261,6 +261,7 @@ Theo provides hooks for Claude Code integration. Install from `hooks/` to `~/.cl
 | `theo-prompt.py` | UserPromptSubmit | Search memories by prompt → inject RFC 2119 context | No |
 | `theo-precontext.py` | PreToolUse | Search memories → inject reminders, can modify input | Can modify |
 | `auto_commit.py` | PostToolUse | Auto-commit Write/Edit/MultiEdit + capture Agent Trace | No |
+| `theo-failure.py` | PostToolUseFailure | Store tool failure patterns for learning | No |
 | `theo-capture.py` | SessionEnd | Summarize session with Ollama → store memories | No (background) |
 | `theo-stop.py` | Stop | Enforce memory storage before allowing stop | Yes |
 
