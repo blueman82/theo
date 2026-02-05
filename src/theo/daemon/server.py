@@ -546,37 +546,6 @@ class DaemonServer:
             "count": len(ids),
         }
 
-    async def _handle_set_active_session(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Set the currently active Claude Code session.
-
-        Args:
-            args: Session info containing session_id, transcript_path, model_id, project_path.
-
-        Returns:
-            Dict confirming active session was set.
-        """
-        self._active_session = {
-            "session_id": args.get("session_id"),
-            "transcript_path": args.get("transcript_path"),
-            "model_id": args.get("model_id"),
-            "project_path": args.get("project_path"),
-            "started_at": datetime.now().isoformat(),
-        }
-        return {"status": "active_session_set"}
-
-    async def _handle_get_active_session(self, args: dict[str, Any]) -> dict[str, Any]:
-        """Get the currently active Claude Code session.
-
-        Args:
-            args: Unused.
-
-        Returns:
-            Dict with active status and session info if active.
-        """
-        if self._active_session is None:
-            return {"active": False, "session": None}
-        return {"active": True, "session": self._active_session}
-
     async def start(self) -> None:
         """Start the daemon server.
 
