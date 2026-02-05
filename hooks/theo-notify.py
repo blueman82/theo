@@ -350,23 +350,6 @@ def _do_notification(hook_input: dict) -> None:
                     f"type={notification_type} | message={message[:100]}\n",
                 )
 
-        # ALWAYS store notification - no exceptions
-        try:
-            with get_daemon_client() as client:
-                client.store(
-                    content=f"Notification: {notification_type} - {message[:200] if message else 'no message'}",
-                    namespace=namespace,
-                    memory_type="session",
-                    importance=0.2,
-                    metadata={
-                        "source": "theo-notify",
-                        "session_id": session_id,
-                        "notification_type": notification_type,
-                    },
-                )
-        except Exception:
-            pass  # Don't fail the hook if storage fails
-
     except Exception as e:
         try:
             timestamp = datetime.now(tz=timezone.utc).isoformat()
