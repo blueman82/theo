@@ -3,8 +3,7 @@
 Tests cover:
 - Trace storage operations (add_trace, get_trace, list_traces_for_conversation)
 - Trace upsert behavior
-- Daemon get_active_session command
-- Commit hook script importability
+- TraceRecord dataclass (agent-trace.dev spec compliant)
 """
 
 from __future__ import annotations
