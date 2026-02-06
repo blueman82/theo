@@ -56,7 +56,7 @@ class TestTranscriptionStorage:
         call_kwargs = mock_store.add_memory.call_args.kwargs
 
         assert call_kwargs["content"] == "Test content"
-        assert call_kwargs["memory_type"] == MemoryType.DOCUMENT.value
+        assert call_kwargs["memory_type"] == MemoryType.SESSION.value
         assert call_kwargs["namespace"] == "default"
         assert call_kwargs["memory_id"] == "session-id"
 

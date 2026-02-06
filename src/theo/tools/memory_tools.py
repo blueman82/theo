@@ -409,9 +409,11 @@ class MemoryTools:
                 Valid relations: relates_to, supersedes, caused_by, contradicts.
                 Optional 'weight' key (default: 1.0).
                 Example: [{"target_id": "mem_abc", "relation": "relates_to"}]
-            supersedes_query: Optional query to find and auto-supersede matching
-                memories. Memories with similarity >= 0.7 will be superseded
-                (importance halved, confidence set to 0.1).
+            supersedes_query: Query to find and auto-supersede matching memories.
+                Memories with similarity >= 0.7 will be superseded (importance
+                halved, confidence set to 0.1). Defaults to content for
+                knowledge types (decision, pattern, preference, fact). Pass
+                empty string "" to disable auto-supersession.
 
         Returns:
             Dictionary with:
@@ -492,6 +494,17 @@ class MemoryTools:
                             "error": f"Invalid relation '{rel['relation']}'. "
                             f"Must be one of: {valid_relations}",
                         }
+
+            # Auto-supersede: for knowledge types, always search for similar memories
+            # to supersede unless explicitly opted out (supersedes_query="")
+            auto_supersede_types = {
+                MemoryType.DECISION,
+                MemoryType.PATTERN,
+                MemoryType.PREFERENCE,
+                MemoryType.FACT,
+            }
+            if supersedes_query is None and mem_type in auto_supersede_types:
+                supersedes_query = content
 
             # Handle supersedes_query - auto-populate relates_to with supersedes relations
             auto_supersedes: list[dict[str, Any]] = []

@@ -242,7 +242,7 @@ class TestTranscriptionSession:
 
         assert doc.id == "test-session-id"
         assert doc.content == "Test transcription content"
-        assert doc.memory_type == MemoryType.DOCUMENT
+        assert doc.memory_type == MemoryType.SESSION
         assert doc.namespace == "default"
         assert doc.metadata is not None
         assert doc.metadata["source"] == "microphone"
