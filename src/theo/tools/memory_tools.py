@@ -495,13 +495,14 @@ class MemoryTools:
                             f"Must be one of: {valid_relations}",
                         }
 
-            # Auto-supersede: for knowledge types, always search for similar memories
+            # Auto-supersede: for all structured types, always search for similar memories
             # to supersede unless explicitly opted out (supersedes_query="")
             auto_supersede_types = {
                 MemoryType.DECISION,
                 MemoryType.PATTERN,
                 MemoryType.PREFERENCE,
                 MemoryType.FACT,
+                MemoryType.SESSION,
             }
             if supersedes_query is None and mem_type in auto_supersede_types:
                 supersedes_query = content
