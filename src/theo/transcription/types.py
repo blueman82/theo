@@ -150,7 +150,7 @@ class TranscriptionSession:
         return MemoryDocument.from_memory(
             memory_id=self.id,
             content=self.get_full_text(),
-            memory_type=MemoryType.DOCUMENT,
+            memory_type=MemoryType.SESSION,
             namespace=namespace,
             metadata={
                 "source": self.source,
