@@ -172,7 +172,7 @@ class TranscriptionTUI:
 
         lines.append("")
         controls = (
-            "[SPACE] Start/Stop | [S] Save | [M] Memorize | "
+            "[SPACE] Start/Stop | [S] Save | "
             "[P] Play TTS | [R] Replay | [V] Voice | [Q] Quit"
         )
         lines.append(f"{DIM}Controls: {controls}{RESET}")
