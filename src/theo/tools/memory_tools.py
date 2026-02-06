@@ -412,8 +412,8 @@ class MemoryTools:
             supersedes_query: Query to find and auto-supersede matching memories.
                 Memories with similarity >= 0.7 will be superseded (importance
                 halved, confidence set to 0.1). Defaults to content for
-                knowledge types (decision, pattern, preference, fact). Pass
-                empty string "" to disable auto-supersession.
+                all structured types (decision, pattern, preference, fact,
+                session). Pass empty string "" to disable auto-supersession.
 
         Returns:
             Dictionary with:
