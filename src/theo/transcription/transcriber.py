@@ -178,15 +178,45 @@ class StreamingTranscriber:
             temperature=self._temperature,
             language=self._language,
             initial_prompt=self._initial_prompt,
-            condition_on_previous_text=True,
+            condition_on_previous_text=False,
         )
 
+        text = self._strip_repetitions(result.text.strip())
+
         return TranscriptionSegment(
-            text=result.text.strip(),
+            text=text,
             start_time=0.0,
             end_time=len(audio) / 16000,
             is_final=True,
         )
+
+    @staticmethod
+    def _strip_repetitions(text: str, max_repeats: int = 2) -> str:
+        """Remove repeated sentences from transcription output.
+
+        Args:
+            text: Transcribed text that may contain repetition loops
+            max_repeats: Maximum allowed consecutive repetitions of a sentence
+
+        Returns:
+            Text with repetition loops truncated
+        """
+        sentences = [s.strip() for s in text.split(".") if s.strip()]
+        if len(sentences) < max_repeats + 1:
+            return text
+
+        result: list[str] = []
+        repeat_count = 0
+        for i, sentence in enumerate(sentences):
+            if i > 0 and sentence == sentences[i - 1]:
+                repeat_count += 1
+                if repeat_count >= max_repeats:
+                    continue
+            else:
+                repeat_count = 0
+            result.append(sentence)
+
+        return ". ".join(result) + "." if result else text
 
     def close(self) -> None:
         """Release model resources."""
