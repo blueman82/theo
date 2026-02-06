@@ -178,11 +178,13 @@ class StreamingTranscriber:
             temperature=self._temperature,
             language=self._language,
             initial_prompt=self._initial_prompt,
-            condition_on_previous_text=True,
+            condition_on_previous_text=False,
         )
 
+        text = self._strip_repetitions(result.text.strip())
+
         return TranscriptionSegment(
-            text=result.text.strip(),
+            text=text,
             start_time=0.0,
             end_time=len(audio) / 16000,
             is_final=True,
