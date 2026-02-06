@@ -240,7 +240,7 @@ class TranscriptionTUI:
             logger.exception("Transcription error: %s", e)
 
     def _save_session(self) -> None:
-        """Save current session as transcription only (source, no memory)."""
+        """Save current session as transcription + audio + searchable memory."""
         if not self._session:
             self._message = "No session to save"
             return
@@ -253,13 +253,12 @@ class TranscriptionTUI:
         if self._recording:
             self._toggle_recording()
 
+        # Save transcription + audio to DB
         try:
-            # Combine audio buffer into single array
             audio_data: np.ndarray | None = None
             if self._audio_buffer:
                 audio_data = np.concatenate(self._audio_buffer)
 
-            # Save to SQLite with audio file (transcription only, no memory)
             transcription_id = self._storage.save_session_to_db(
                 session=self._session,
                 audio_data=audio_data,
@@ -269,76 +268,32 @@ class TranscriptionTUI:
             )
             self._last_saved_id = transcription_id
 
-            # Track audio path for replay
             if audio_data is not None:
                 self._last_audio_path = audio_storage.get_audio_path(self._session.id)
             else:
                 self._last_audio_path = None
 
-            self._message = f"Saved: {transcription_id[:8]}... (source only)"
-
-            # Clear audio buffer after save
             self._audio_buffer = []
-
         except Exception as e:
             self._message = f"Save failed: {e}"
             logger.exception("Save error: %s", e)
-
-    def _memorize_session(self) -> None:
-        """Save current session as transcription AND memory (source + knowledge)."""
-        if not self._session:
-            self._message = "No session to memorize"
             return
-        if not self._storage:
-            self._message = "Storage not configured"
-            return
-        if self._recording:
-            self._toggle_recording()
 
-        # First save the transcription if not already saved
-        already_saved = self._last_saved_id == self._session.id
-        if not already_saved:
-            try:
-                audio_data: np.ndarray | None = None
-                if self._audio_buffer:
-                    audio_data = np.concatenate(self._audio_buffer)
-
-                transcription_id = self._storage.save_session_to_db(
-                    session=self._session,
-                    audio_data=audio_data,
-                    namespace=self._namespace,
-                    model_used=self._model_path,
-                    language=self._language,
-                )
-                self._last_saved_id = transcription_id
-
-                if audio_data is not None:
-                    self._last_audio_path = audio_storage.get_audio_path(self._session.id)
-                else:
-                    self._last_audio_path = None
-
-                self._audio_buffer = []
-            except Exception as e:
-                self._message = f"Save failed: {e}"
-                logger.exception("Save error: %s", e)
-                return
-
-        # Now create memory with provenance link
+        # Create searchable memory with provenance link
         try:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             try:
-                # Add source_transcription to metadata for provenance
                 self._session.metadata["source_transcription_id"] = self._session.id
                 memory_id = loop.run_until_complete(
                     self._storage.save_session(self._session, self._namespace)
                 )
-                self._message = f"Memorized: {self._session.id[:8]}... → memory: {memory_id[:8]}..."
+                self._message = f"Saved: {self._session.id[:8]}... → memory: {memory_id[:8]}..."
             finally:
                 loop.close()
         except Exception as e:
-            self._message = f"Memorize failed: {e}"
-            logger.exception("Memorize error: %s", e)
+            self._message = f"Memory creation failed: {e}"
+            logger.exception("Memory error: %s", e)
 
     def _play_tts(self) -> None:
         """Play current transcription text via TTS."""
