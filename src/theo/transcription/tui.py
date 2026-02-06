@@ -121,8 +121,6 @@ class TranscriptionTUI:
             self._toggle_recording()
         elif key.lower() == "s":
             self._save_session()
-        elif key.lower() == "m":
-            self._memorize_session()
         elif key.lower() == "p":
             self._play_tts()
         elif key.lower() == "r":
