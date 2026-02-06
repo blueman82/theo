@@ -1,7 +1,7 @@
 """Terminal UI for real-time transcription.
 
 Simple ANSI-based TUI for voice transcription.
-Keyboard controls: SPACE to start/stop, S to save, P play TTS, R replay, V voice, Q quit.
+Keyboard controls: SPACE to start/stop, S to save (transcription + memory), P play TTS, R replay, V voice, Q quit.
 """
 
 import asyncio
