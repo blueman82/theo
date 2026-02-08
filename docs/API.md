@@ -434,7 +434,8 @@ Store a new memory with semantic indexing.
     "namespace": "global",
     "memory_type": "preference",
     "duplicate": false,
-    "confidence": 0.3
+    "confidence": 0.3,
+    "superseded": ["mem_old1", "mem_old2"]
   }
 }
 ```
