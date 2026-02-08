@@ -114,10 +114,11 @@ flowchart TB
 
     subgraph MCPServer["MCP Server Layer"]
         FM[FastMCP Server]
-        subgraph Tools["Tool Registration"]
+        subgraph Tools["Tool Registration — 26 tools"]
             DT[Document Tools]
             ST[Search Tools]
             MT[Memory Tools]
+            TRT[Trace Tools]
             MGT[Management Tools]
         end
     end
