@@ -134,6 +134,11 @@ Batch index multiple documents from a directory with deduplication.
       "type": "string",
       "description": "Namespace for organizing documents",
       "default": "default"
+    },
+    "async_mode": {
+      "type": "boolean",
+      "description": "Queue chunks for fast background processing",
+      "default": true
     }
   },
   "required": ["dir_path"]
@@ -147,6 +152,7 @@ Batch index multiple documents from a directory with deduplication.
 | `dir_path` | string | Yes | - | Directory path to scan |
 | `recursive` | boolean | No | true | Include subdirectories |
 | `namespace` | string | No | "default" | Namespace for all indexed files |
+| `async_mode` | boolean | No | true | If True, queue chunks for fast background processing. If False, wait for all embeddings synchronously. |
 
 #### Response Schema
 
