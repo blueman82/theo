@@ -1,5 +1,5 @@
 # CLAUDE.md
-Last updated: 2026-02-06
+Last updated: 2026-02-08
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -260,6 +260,7 @@ Theo provides hooks for Claude Code integration. Install from `hooks/` to `~/.cl
 | `theo-context.py` | SessionStart | Fetch + curate memories → inject session context | No |
 | `theo-prompt.py` | UserPromptSubmit | Search memories by prompt → inject RFC 2119 context | No |
 | `theo-precontext.py` | PreToolUse | Search memories → inject reminders, can modify input | Can modify |
+| `theo-recall.py` | PostToolUse | Autonomous memory recall based on tool output (errors, file reads) | No |
 | `auto_commit.py` | PostToolUse | Auto-commit Write/Edit/MultiEdit + capture Agent Trace | No |
 | `theo-failure.py` | PostToolUseFailure | Store tool failure patterns for learning | No |
 | `theo-capture.py` | SessionEnd | Summarize session with Ollama → store memories | No (background) |
@@ -267,18 +268,22 @@ Theo provides hooks for Claude Code integration. Install from `hooks/` to `~/.cl
 
 ### Context Injection Flow
 
-Three hooks inject context at different points with increasing specificity:
+Four hooks inject context at different lifecycle points:
 
 ```
-SessionStart          UserPromptSubmit       PreToolUse
-     │                      │                     │
-     ▼                      ▼                     ▼
-theo-context.py      theo-prompt.py      theo-precontext.py
-     │                      │                     │
-     ▼                      ▼                     ▼
-Curated memories     Prompt-specific      Tool-specific
-(broad context)      memories (targeted)  reminders (precise)
+SessionStart          UserPromptSubmit       PreToolUse            PostToolUse
+     │                      │                     │                     │
+     ▼                      ▼                     ▼                     ▼
+theo-context.py      theo-prompt.py      theo-precontext.py    theo-recall.py
+     │                      │                     │                     │
+     ▼                      ▼                     ▼                     ▼
+Curated memories     Prompt-specific      Tool-specific         Reactive recall
+(broad context)      memories (targeted)  reminders (precise)   (output-based)
 ```
+
+The first three hooks are **proactive** (inject before actions). The fourth is
+**reactive** (recalls memories based on what actually happened — errors, file
+reads, test failures). This closes the loop: context flows in both directions.
 
 ### Supporting Files
 
@@ -291,6 +296,38 @@ Curated memories     Prompt-specific      Tool-specific
 | `theo_session_state.py` | Session state tracking |
 | `theo-daemon.py` | Unix socket server (background service) |
 | `theo-daemon-ctl.py` | Daemon lifecycle management |
+
+## Autonomous Memory Behavior
+
+Theo hooks automatically inject memory context at multiple lifecycle points.
+Claude MUST treat injected memories according to their RFC 2119 priority:
+
+- **MUST** items: Follow unconditionally. These are golden rules or high-confidence memories.
+- **SHOULD** items: Follow unless there is a specific, documented reason not to.
+- **MAY** items: Consider as helpful context. Apply when relevant.
+
+### Proactive Memory Use
+
+When working on tasks, Claude should proactively use Theo's memory tools:
+
+1. **Store learnings**: Use `memory_store` when discovering preferences, patterns, or decisions.
+   Do not wait for the user to ask — store anything that would be useful in future sessions.
+2. **Validate memories**: When applying knowledge from a surfaced memory, use `memory_apply`
+   before and `memory_outcome` after to record whether it worked. This builds confidence
+   and enables golden rule promotion.
+3. **Check memories first**: Before making architectural decisions or choosing between
+   approaches, search Theo for relevant past decisions with `memory_recall`.
+
+### Reactive Recall (theo-recall.py)
+
+The `theo-recall.py` PostToolUse hook automatically recalls memories when:
+
+- **Bash commands fail**: Searches for similar error patterns and known fixes
+- **Files are read**: Searches for file/module-specific decisions and patterns
+
+This means Claude does not need to be asked to recall memories — relevant context
+is injected automatically after errors and file reads. When recalled memories appear
+in the context, apply them immediately rather than asking the user for confirmation.
 
 ## File Paths and Structure
 
