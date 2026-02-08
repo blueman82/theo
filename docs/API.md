@@ -1034,6 +1034,39 @@ List memories with filtering and pagination.
 
 ---
 
+### Tool: memory_list_namespaces
+
+List all namespaces with their memory counts.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+This tool takes no parameters.
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "namespaces": [
+      {"namespace": "global", "count": 42},
+      {"namespace": "project:myapp", "count": 15}
+    ],
+    "total_namespaces": 2,
+    "total_memories": 57
+  }
+}
+```
+
+---
+
 ### Tool: validation_history
 
 Get validation event history for a memory.
