@@ -4,7 +4,7 @@ This document provides detailed specifications for all MCP tools exposed by the 
 
 ## Overview
 
-Theo exposes 27 tools organized into seven categories:
+Theo exposes 26 tools organized into nine categories:
 
 **Document Indexing Tools**
 1. `index_file` - Index a single document
@@ -18,34 +18,39 @@ Theo exposes 27 tools organized into seven categories:
 **Memory Tools (Core)**
 6. `memory_store` - Store a new memory
 7. `memory_recall` - Recall memories by semantic search
-8. `memory_validate` - Validate and adjust memory confidence
-9. `memory_forget` - Delete memories
-10. `memory_context` - Generate context for LLM injection
+8. `memory_forget` - Delete memories
+9. `memory_context` - Generate context for LLM injection
 
 **TRY/LEARN Cycle Tools**
-11. `memory_apply` - Record memory application (TRY phase)
-12. `memory_outcome` - Record outcome and adjust confidence (LEARN phase)
+10. `memory_apply` - Record memory application (TRY phase)
+11. `memory_outcome` - Record outcome and adjust confidence (LEARN phase)
 
 **Graph Relationship Tools**
-13. `memory_relate` - Create relationships between memories
-14. `memory_edge_forget` - Delete edges/relationships
-15. `memory_inspect_graph` - Visualize memory graph structure
+12. `memory_relate` - Create relationships between memories
+13. `memory_edge_forget` - Delete edges/relationships
+14. `memory_inspect_graph` - Visualize memory graph structure
 
 **Memory Inspection Tools**
-16. `memory_count` - Count memories with filters
-17. `memory_list` - List memories with pagination
+15. `memory_count` - Count memories with filters
+16. `memory_list` - List memories with pagination
+17. `memory_list_namespaces` - List all namespaces with counts
 18. `validation_history` - Get validation event history
 
 **Validation Analysis Tools**
-19. `memory_detect_contradictions` - Find contradicting memories
-20. `memory_check_supersedes` - Check if memory supersedes another
-21. `memory_analyze_health` - Analyze memory system health
+19. `memory_analyze_health` - Analyze memory system health
+
+**Maintenance Tools**
+20. `memory_backfill_edges` - Backfill orphan memory edges
 
 **Management Tools**
-22. `delete_chunks` - Delete specific chunks by ID
-23. `delete_file` - Delete all chunks from a source file
-24. `clear_index` - Clear entire collection (requires confirmation)
-25. `get_index_stats` - Get collection statistics
+21. `delete_chunks` - Delete specific chunks by ID
+22. `delete_file` - Delete all chunks from a source file
+23. `clear_index` - Clear entire collection (requires confirmation)
+24. `get_index_stats` - Get collection statistics
+
+**Agent Trace Tools**
+25. `trace_query` - Query AI attribution via git blame
+26. `trace_list` - List recorded traces
 
 ---
 
