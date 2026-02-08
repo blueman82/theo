@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "theo"
-version = "0.10.2"
+version = "0.10.3"
 description = "AI memory and document retrieval system with semantic indexing and validation"
 readme = "README.md"
 requires-python = ">=3.13"
