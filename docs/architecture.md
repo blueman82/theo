@@ -261,11 +261,13 @@ Manages semantic search pipeline:
 **Implementation**: `src/theo/tools/memory_tools.py`
 
 Manages memory lifecycle:
-1. Store memories with deduplication
-2. Recall memories with semantic search
-3. Validate memories to adjust confidence
+1. Store memories with deduplication and auto-supersession
+2. Recall memories with semantic search and graph expansion
+3. Apply/outcome cycle to adjust confidence (TRY → LEARN)
 4. Forget memories (with golden rule protection)
 5. Generate context for LLM injection
+6. Graph relationship management (relate, edge_forget, inspect)
+7. Backfill orphan edges for graph maintenance
 
 **Key Design Decisions**:
 - Deduplication: Same content returns existing ID
