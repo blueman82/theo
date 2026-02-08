@@ -1186,6 +1186,66 @@ Analyze the health of memories in the system.
 
 ---
 
+## Maintenance Tools
+
+### Tool: memory_backfill_edges
+
+Backfill edges for orphan memories (memories with no graph connections).
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "namespace": {
+      "type": "string",
+      "description": "Limit to specific namespace"
+    },
+    "batch_size": {
+      "type": "integer",
+      "description": "Process this many memories per batch",
+      "default": 50
+    },
+    "max_memories": {
+      "type": "integer",
+      "description": "Maximum total memories to process",
+      "default": 500
+    },
+    "dry_run": {
+      "type": "boolean",
+      "description": "If true, only count orphans without creating edges",
+      "default": false
+    }
+  }
+}
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `namespace` | string | No | - | Limit to specific namespace |
+| `batch_size` | integer | No | 50 | Process this many memories per batch |
+| `max_memories` | integer | No | 500 | Maximum total memories to process |
+| `dry_run` | boolean | No | false | Only count orphans without creating edges |
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "data": {
+    "orphan_count": 25,
+    "processed_count": 25,
+    "edges_created": 18,
+    "batches_run": 1
+  }
+}
+```
+
+---
+
 ## Management Tools
 
 ### Tool: delete_chunks
