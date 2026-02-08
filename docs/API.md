@@ -1393,6 +1393,131 @@ This tool takes no parameters.
 
 ---
 
+## Agent Trace Tools
+
+### Tool: trace_query
+
+Query AI attribution for code in a file. Uses git blame to find the commit responsible for the code, then looks up any recorded AI attribution for that commit.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file": {
+      "type": "string",
+      "description": "Path to file to query"
+    },
+    "line": {
+      "type": "integer",
+      "description": "Optional line number to query specific line"
+    }
+  },
+  "required": ["file"]
+}
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `file` | string | Yes | - | Path to file to query |
+| `line` | integer | No | - | Line number to query specific line |
+
+#### Response Schema
+
+**When attribution is found:**
+```json
+{
+  "success": true,
+  "found": true,
+  "trace": {
+    "id": "uuid-string",
+    "version": "0.1",
+    "timestamp": "2026-02-08T12:00:00Z",
+    "files": [
+      {
+        "path": "src/theo/mcp_server.py",
+        "conversations": [
+          {
+            "url": "/path/to/transcript.jsonl",
+            "ranges": [{"start_line": 10, "end_line": 25}]
+          }
+        ]
+      }
+    ],
+    "vcs": {"type": "git", "revision": "abc123"},
+    "tool": {"name": "claude-code", "version": "1.0.0"}
+  },
+  "commit": "abc123def456..."
+}
+```
+
+**When no attribution found:**
+```json
+{
+  "success": true,
+  "found": false,
+  "commit": "abc123def456...",
+  "message": "No AI attribution found"
+}
+```
+
+---
+
+### Tool: trace_list
+
+List recorded AI attribution traces, optionally filtered by conversation URL.
+
+#### Input Schema
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "conversation_url": {
+      "type": "string",
+      "description": "Filter by conversation transcript path"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "Maximum traces to return",
+      "default": 20
+    }
+  }
+}
+```
+
+#### Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `conversation_url` | string | No | - | Filter by conversation transcript path |
+| `limit` | integer | No | 20 | Maximum traces to return |
+
+#### Response Schema
+
+```json
+{
+  "success": true,
+  "traces": [
+    {
+      "id": "uuid-string",
+      "version": "0.1",
+      "timestamp": "2026-02-08T12:00:00Z",
+      "files": [...],
+      "vcs": {"type": "git", "revision": "abc123"},
+      "tool": {"name": "claude-code", "version": "1.0.0"},
+      "commit_sha": "abc123def456..."
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
 ## Error Handling
 
 All tools return a consistent error response format:
