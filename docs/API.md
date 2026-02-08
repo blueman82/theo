@@ -395,6 +395,10 @@ Store a new memory with semantic indexing.
     "metadata": {
       "type": "object",
       "description": "Optional additional metadata"
+    },
+    "supersedes_query": {
+      "type": "string",
+      "description": "Optional query to find and auto-supersede matching memories"
     }
   },
   "required": ["content"]
