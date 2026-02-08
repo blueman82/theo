@@ -284,7 +284,7 @@ async def memory_recall(
         memory_type: Filter by memory type (optional)
         min_importance: Minimum importance score filter (optional)
         min_confidence: Minimum confidence score filter (optional)
-        include_related: If True, expand results via graph edges (default: False)
+        include_related: If True, expand results via graph edges (default: True)
         max_depth: Maximum graph traversal depth (default: 1)
 
     Returns:
