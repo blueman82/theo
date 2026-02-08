@@ -27,11 +27,15 @@ Built on three core principles:
 ┌────────────────────────────▼────────────────────────────────┐
 │                      MCP Server Layer                        │
 │  ┌───────────────────────────────────────────────────────┐  │
-│  │  Tool Registration & Dispatch (FastMCP)               │  │
+│  │  Tool Registration & Dispatch (FastMCP) — 26 tools    │  │
 │  │  ├─ Document Tools: index_file, index_directory       │  │
-│  │  ├─ Search Tools: search, search_with_filters, etc.   │  │
-│  │  ├─ Memory Tools: memory_store, memory_recall, etc.   │  │
-│  │  └─ Management Tools: delete_*, clear_index, stats    │  │
+│  │  ├─ Search Tools: search, search_with_filters, ...    │  │
+│  │  ├─ Memory Tools: store, recall, forget, context      │  │
+│  │  ├─ TRY/LEARN: memory_apply, memory_outcome           │  │
+│  │  ├─ Graph: relate, edge_forget, inspect_graph         │  │
+│  │  ├─ Inspection: count, list, namespaces, history, ... │  │
+│  │  ├─ Trace Tools: trace_query, trace_list              │  │
+│  │  └─ Management: delete_*, clear_index, stats          │  │
 │  └───────────────────────────────────────────────────────┘  │
 └────────────────────────────┬────────────────────────────────┘
                              │
