@@ -489,6 +489,16 @@ Recall memories using semantic search.
     "min_confidence": {
       "type": "number",
       "description": "Minimum confidence score filter"
+    },
+    "include_related": {
+      "type": "boolean",
+      "description": "Expand results via graph edges",
+      "default": true
+    },
+    "max_depth": {
+      "type": "integer",
+      "description": "Maximum graph traversal depth",
+      "default": 1
     }
   },
   "required": ["query"]
@@ -509,7 +519,8 @@ Recall memories using semantic search.
         "namespace": "global",
         "confidence": 0.7,
         "importance": 0.8,
-        "score": 0.92
+        "score": 0.92,
+        "expanded": false
       }
     ],
     "total": 1,
