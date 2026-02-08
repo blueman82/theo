@@ -157,6 +157,13 @@ flowchart TB
         SQL[(SQLite + sqlite-vec<br/>Unified Storage)]
     end
 
+    subgraph Transcription["Transcription Layer"]
+        AC[AudioCapture]
+        STR[StreamingTranscriber]
+        TUI[TranscriptionTUI]
+        TS[TranscriptionStorage]
+    end
+
     CC -->|JSON-RPC/stdio| FM
     FM --> DT & ST & MT & MGT
     DT --> IT
