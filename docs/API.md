@@ -723,6 +723,11 @@ Record the outcome of a memory application (LEARN phase) and adjust confidence.
     "session_id": {
       "type": "string",
       "description": "Optional session identifier"
+    },
+    "skip_event": {
+      "type": "boolean",
+      "description": "Skip event recording and only adjust confidence",
+      "default": false
     }
   },
   "required": ["memory_id", "success"]
