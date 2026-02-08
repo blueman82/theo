@@ -5,70 +5,137 @@
       "args": ["run", "--directory", "/path/to/theo", "python", "-m", "theo"],
       "env": {
         "THEO_EMBEDDING_BACKEND": "mlx",
-        "THEO_DB_PATH": "~/.theo/chroma_db",
+        "THEO_SQLITE_PATH": "~/.theo/theo.db",
         "THEO_LOG_LEVEL": "INFO"
       }
     }
   },
   "hooks": {
-    "PrePromptSubmit": [
+    "SessionStart": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-daemon-ctl.py --ensure-running",
-        "timeout": 10
-      },
-      {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-precontext.py",
-        "timeout": 5
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-context.py",
+            "timeout": 90
+          }
+        ]
       }
     ],
-    "PostPromptSubmit": [
+    "SessionEnd": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-prompt.py",
-        "timeout": 5
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-capture.py",
+            "timeout": 30
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-monitor.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-prompt.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-context.py",
-        "timeout": 5
+        "matcher": "Bash|Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-security.py",
+            "timeout": 10
+          }
+        ]
       },
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-permissions.py",
-        "timeout": 5
+        "matcher": "Task|Bash|Glob|Grep|Read|Edit|MultiEdit|Write|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-precontext.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-recall.py",
-        "timeout": 5
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/auto_commit.py",
+            "timeout": 30
+          }
+        ]
       },
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-capture.py",
-        "timeout": 5
+        "matcher": "Bash|Read",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-recall.py",
+            "timeout": 10
+          }
+        ]
       },
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-track.py",
-        "timeout": 5
+        "matcher": "Task|Bash|Glob|Grep|Read|Write|Edit|MultiEdit|WebFetch|WebSearch|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-track.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
-    "Stop": [
+    "PostToolUseFailure": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-stop.py",
-        "timeout": 30
-      },
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-failure.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-compact.py",
-        "timeout": 10
+        "matcher": "auto|manual",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-compact.py",
+            "timeout": 60000
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-permissions.py",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "Notification": [
@@ -78,16 +145,31 @@
           {
             "type": "command",
             "command": "~/.claude/hooks/theo-notify.py",
-            "timeout": 5
+            "timeout": 10
           }
         ]
       }
     ],
-    "SubagentStart": [
+    "SubagentStop": [
       {
-        "type": "command",
-        "command": "~/.claude/hooks/theo-subagent.py",
-        "timeout": 5
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-subagent.py",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/theo-stop.py",
+            "timeout": 10
+          }
+        ]
       }
     ]
   }
