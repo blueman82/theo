@@ -534,10 +534,16 @@ class RelationType(str, Enum):
 │ Memory   │ → Returns memory with id="mem_123"
 └────┬─────┘
      │
-     │ Memory is used in conversation
+     │ Memory is applied in conversation
      ▼
 ┌──────────┐
-│ Validate │ memory_validate(id="mem_123", was_helpful=True)
+│ Apply    │ memory_apply(memory_id="mem_123", context="Using in auth flow")
+└────┬─────┘
+     │
+     │ Observe outcome
+     ▼
+┌──────────┐
+│ Outcome  │ memory_outcome(memory_id="mem_123", success=True)
 └────┬─────┘
      │
      ▼
@@ -553,7 +559,7 @@ class RelationType(str, Enum):
      │
      ▼
 ┌──────────────────┐
-│ Response         │ ─── {old_confidence: 0.7, new_confidence: 0.8, promoted: false}
+│ Response         │ ─── {new_confidence: 0.8, promoted: false}
 └──────────────────┘
 ```
 
