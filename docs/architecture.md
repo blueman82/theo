@@ -165,11 +165,12 @@ flowchart TB
     end
 
     CC -->|JSON-RPC/stdio| FM
-    FM --> DT & ST & MT & MGT
+    FM --> DT & ST & MT & TRT & MGT
     DT --> IT
     ST --> QT
     MT --> MTools
     MTools --> VL
+    TRT --> TR
 
     IT --> DC
     QT --> DC
@@ -185,6 +186,12 @@ flowchart TB
 
     DC --> HS
     HS --> SQL
+    TR --> SQL
+
+    AC --> STR
+    STR --> TUI
+    TUI --> TS
+    TS --> SQL
 ```
 
 ## Component Descriptions
