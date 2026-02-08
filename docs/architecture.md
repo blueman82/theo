@@ -424,6 +424,95 @@ class AbstractChunker(ABC):
 | TextChunker | .txt | Paragraph-first with sentence fallback |
 | CodeChunker | .py | AST-based semantic chunking |
 
+### Transcription Layer
+
+**Responsibility**: Voice transcription pipeline using MLX Whisper
+
+**Implementation**: `src/theo/transcription/`
+
+The transcription module provides real-time voice-to-text capabilities with memory integration:
+
+#### Components
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| AudioCapture | `audio.py` | Microphone recording with silence detection |
+| StreamingTranscriber | `transcriber.py` | MLX Whisper transcription engine |
+| TranscriptionTUI | `tui.py` | Terminal UI for recording and playback |
+| TranscriptionStorage | `storage.py` | Persist transcriptions and link to memories |
+| AudioStorage | `audio_storage.py` | Audio file persistence at `~/.theo/audio/` |
+
+#### Data Flow
+
+```
+Microphone → AudioCapture → StreamingTranscriber → TranscriptionTUI
+                                                          │
+                                                          ▼
+                                               TranscriptionStorage
+                                                          │
+                                                          ▼
+                                               MemoryDocument (type=session)
+                                                    → SQLiteStore
+```
+
+#### Key Design Decisions
+
+- **MLX Whisper**: Local-first transcription on Apple Silicon, no cloud APIs
+- **Silence Detection**: Automatic chunking at speech pauses for real-time feedback
+- **Memory Integration**: Transcription sessions are stored as `session` type memories for recall
+- **Audio Persistence**: Raw audio saved at `~/.theo/audio/` for replay and re-transcription
+- **TTS via Orpheus-FastAPI**: Text-to-speech for bidirectional voice interaction
+
+### Agent Trace
+
+**Responsibility**: AI code attribution following the [agent-trace.dev](https://agent-trace.dev) open standard
+
+**Implementation**: Trace storage in `src/theo/storage/sqlite_store.py` (TraceRecord dataclass), tools in `src/theo/mcp_server.py`
+
+The Agent Trace system records which code was written by AI tools, enabling attribution queries.
+
+#### TraceRecord Schema
+
+```python
+@dataclass
+class TraceRecord:
+    id: str              # UUID
+    version: str         # Spec version (e.g., "0.1")
+    timestamp: str       # RFC 3339
+    files_json: str      # JSON array per spec
+    vcs_json: str | None # {type, revision}
+    tool_json: str | None # {name, version}
+    commit_sha: str | None # Git commit for lookup
+    session_id: str | None # Session link
+```
+
+#### How It Works
+
+1. `auto_commit.py` PostToolUse hook captures Write/Edit/MultiEdit operations
+2. After commit, extracts line ranges via `git diff HEAD~1..HEAD --unified=0`
+3. Model ID auto-detected from Claude Code transcript
+4. Trace stored in SQLite `traces` table with spec-compliant JSON structure
+
+#### Query Flow
+
+```
+trace_query(file, line)
+     │
+     ▼
+git blame --porcelain → commit SHA
+     │
+     ▼
+SQLiteStore.get_trace(sha) → TraceRecord
+     │
+     ▼
+{found: true, trace: {...}, commit: "abc123"}
+```
+
+#### MCP Tools
+
+- `trace_query(file, line)`: Query AI attribution for a specific file/line via git blame
+- `trace_list(conversation_url, limit)`: List recorded traces, optionally filtered by conversation
+
 ## Unified Data Model
 
 ### MemoryDocument
