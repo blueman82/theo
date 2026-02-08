@@ -128,6 +128,7 @@ flowchart TB
         QT[QueryTools]
         MTools[MemoryTools]
         VL[ValidationLoop]
+        TR[TraceOps]
     end
 
     subgraph Daemon["Daemon Layer"]
